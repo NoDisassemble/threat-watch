@@ -15,7 +15,7 @@ The dashboard includes separate top-five watchlists and data-chart views for CWE
 - Identifies mappings to ranked OWASP Top 10:2025 risk categories
 - Looks up individual weaknesses by CWE number
 - Looks up individual vulnerabilities by CVE identifier
-- Exports the current top-five watchlist as a PDF report
+- Exports the current top-five CWE watchlist as a PDF report
 - Supports light and dark themes
 - Caches the generated watchlist for 24 hours to reduce external API requests
 
@@ -44,8 +44,8 @@ No Python packages or JavaScript dependencies need to be installed.
 1. Clone the repository and enter its directory:
 
    ```bash
-   git clone https://github.com/NoDisassemble/cwe-watchlist.git
-   cd cwe-watchlist
+   git clone https://github.com/NoDisassemble/threat-watch.git
+   cd threat-watch
    ```
 
 2. Start the local server:
@@ -69,12 +69,12 @@ Do not open `index.html` directly. The Python server is required because it serv
 ## Project structure
 
 ```text
-cwe-watchlist/
-|-- index.html    # Dashboard markup
-|-- styles.css    # Layout, responsive styles, and themes
-|-- script.js     # Dashboard rendering, lookup, and PDF export
-|-- server.py     # Static server, API proxies, CWE/CVE ranking, and caches
-|-- owasp_2025.json # Versioned OWASP category mappings
+threat-watch/
+|-- index.html       # Dashboard markup
+|-- styles.css       # Layout, responsive styles, themes, and charts
+|-- script.js        # Dashboard rendering, lookups, charts, and PDF export
+|-- server.py        # Static server, API proxies, ranking, timelines, and caches
+|-- owasp_2025.json  # Versioned OWASP category mappings
 `-- README.md
 ```
 
@@ -82,9 +82,9 @@ OWASP badges indicate that a CWE maps to a ranked OWASP risk category. The displ
 
 ## Troubleshooting
 
-- **The dashboard says data is unavailable:** Confirm that the computer can reach the MITRE, CISA, and FIRST APIs, then select **Refresh data**.
-- **Port 8000 is already in use:** Stop the other process using that port, or change `8000` near the bottom of `server.py` and open the matching URL.
-- **The data appears stale:** Delete `.watchlist-cache.json` and restart the server to force a fresh watchlist calculation.
+- **The dashboard says data is unavailable:** Confirm that the computer can reach the MITRE, CISA, FIRST, and NVD APIs, then select **Refresh data**. If only MITRE is unavailable, the CISA-backed rankings and charts still load with reduced CWE metadata.
+- **Port 8000 is already in use:** Stop the other process, or set the `PORT` environment variable before starting the server (for example, `$env:PORT=8080; python server.py` in PowerShell).
+- **The data appears stale:** Delete `.watchlist-cache.json` and `.cve-watchlist-cache.json`, then restart the server to force fresh calculations.
 
 ## License
 
