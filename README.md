@@ -1,16 +1,19 @@
-# CWE Watch
+# Threat Watch
 
-CWE Watch is a live security intelligence dashboard for exploring software weaknesses from the [MITRE Common Weakness Enumeration (CWE)](https://cwe.mitre.org/) catalog.
+Threat Watch is a live security intelligence dashboard for exploring both software weakness patterns (CWEs) and individual vulnerabilities (CVEs).
 
-The dashboard builds a top-five watchlist using vulnerabilities known to be exploited in the wild. It combines CISA Known Exploited Vulnerabilities (KEV) data with FIRST EPSS likelihood data, then enriches each result with its corresponding MITRE CWE record.
+The dashboard includes separate top-five watchlists and data-chart views for CWE and CVE intelligence. It combines CISA Known Exploited Vulnerabilities (KEV) data with FIRST EPSS likelihood data, MITRE CWE records, and NVD CVE enrichment.
 
 ## Features
 
 - Displays the current CWE catalog version and catalog totals
 - Ranks five high-priority weaknesses using CISA KEV, ransomware, recency, and EPSS signals
+- Ranks five recently exploited CVEs using KEV, ransomware, recency, EPSS, and CVSS signals
+- Provides separate CWE and CVE chart views through a persistent side navigation
 - Shows threat scores and full descriptions for watchlist entries
 - Identifies mappings to ranked OWASP Top 10:2025 risk categories
 - Looks up individual weaknesses by CWE number
+- Looks up individual vulnerabilities by CVE identifier
 - Exports the current top-five watchlist as a PDF report
 - Supports light and dark themes
 - Caches the generated watchlist for 24 hours to reduce external API requests
@@ -20,9 +23,10 @@ The dashboard builds a top-five watchlist using vulnerabilities known to be expl
 - [MITRE CWE REST API](https://github.com/CWE-CAPEC/REST-API-wg) for CWE catalog metadata and weakness records
 - [CISA Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) for evidence of exploitation in the wild
 - [FIRST EPSS](https://www.first.org/epss/) for exploit-probability percentiles
+- [NVD CVE API 2.0](https://nvd.nist.gov/developers/vulnerabilities) for CVE descriptions, CVSS scores, status, references, and CWE mappings
 - [OWASP Top 10:2025](https://owasp.org/Top10/) and [MITRE CWE View 1450](https://cwe.mitre.org/data/definitions/1450.html) for CWE-to-OWASP category mappings
 
-An internet connection is required when the server retrieves fresh data. CWE Watch is an informational dashboard; its threat score is a project-specific ranking and should not be treated as an official risk rating.
+An internet connection is required when the server retrieves fresh data. Threat Watch is an informational dashboard; its threat scores are project-specific rankings and should not be treated as official risk ratings.
 
 ## Run locally
 
@@ -68,7 +72,7 @@ cwe-watchlist/
 |-- index.html    # Dashboard markup
 |-- styles.css    # Layout, responsive styles, and themes
 |-- script.js     # Dashboard rendering, lookup, and PDF export
-|-- server.py     # Static server, API proxy, ranking, and cache
+|-- server.py     # Static server, API proxies, CWE/CVE ranking, and caches
 |-- owasp_2025.json # Versioned OWASP category mappings
 `-- README.md
 ```

@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Live CWE intelligence dashboard." />
-    <title>CWE Watch — Intelligence Dashboard</title>
+    <meta name="description" content="Live CWE and CVE threat intelligence dashboard." />
+    <title>Threat Watch — CWE &amp; CVE Intelligence</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -12,42 +12,75 @@
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="index.html">CWE<span>WATCH</span></a>
-      <nav aria-label="Dashboard navigation"><a href="#overview">Overview</a><a href="#weaknesses">Watchlist</a><a href="#lookup">Lookup</a></nav>
+      <button class="menu-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false">Menu</button>
+      <a class="brand" href="#cwe-watchlist" data-route="cwe-watchlist">THREAT<span>WATCH</span></a>
+      <p class="topbar-context" id="topbar-context">CWE / Top 5</p>
       <button class="theme-toggle" type="button" aria-label="Switch to dark theme" aria-pressed="false"><span aria-hidden="true">◐</span><span class="theme-label">Dark</span></button>
     </header>
 
+    <aside class="sidebar" aria-label="Intelligence navigation">
+      <div class="sidebar-heading"><span>Intelligence</span><small>Live threat data</small></div>
+      <nav class="side-nav">
+        <section class="nav-group">
+          <p><span class="nav-index">01</span>CWE watchlist</p>
+          <a href="#cwe-watchlist" data-route="cwe-watchlist" class="active">Top 5</a>
+          <a href="#cwe-charts" data-route="cwe-charts">Data charts</a>
+        </section>
+        <section class="nav-group">
+          <p><span class="nav-index">02</span>CVE watchlist</p>
+          <a href="#cve-watchlist" data-route="cve-watchlist">Top 5</a>
+          <a href="#cve-charts" data-route="cve-charts">Data charts</a>
+        </section>
+      </nav>
+      <div class="sidebar-status"><span class="live-dot"></span><span>Sources connected</span></div>
+    </aside>
+
     <main class="dashboard-shell">
-      <section class="intro" id="overview">
-        <div><p class="eyebrow"><span class="live-dot"></span> Live MITRE data</p><h1>CWE intelligence,<br /><em>in focus.</em></h1></div>
-        <p class="intro-copy">Track the current Common Weakness Enumeration catalog and inspect individual software weakness records.</p>
+      <section class="view-panel active" id="cwe-watchlist" data-title="CWE / Top 5">
+        <header class="intro">
+          <div><p class="eyebrow"><span class="live-dot"></span> Live weakness intelligence</p><h1>CWE threats,<br /><em>in focus.</em></h1></div>
+          <p class="intro-copy">The software weakness patterns most connected to active exploitation, ransomware, and near-term exploit probability.</p>
+        </header>
+        <section class="metrics-grid" aria-label="CWE catalog overview">
+          <article class="metric-card highlight"><p>Catalog version</p><strong id="content-version">Loading…</strong><span id="content-date">Fetching current release</span></article>
+          <article class="metric-card"><p>Total weaknesses</p><strong id="weakness-count">—</strong><span>Defined software weaknesses</span></article>
+          <article class="metric-card"><p>Categories</p><strong id="category-count">—</strong><span>Organized CWE groupings</span></article>
+          <article class="metric-card"><p>Views</p><strong id="view-count">—</strong><span>Catalog perspectives</span></article>
+        </section>
+        <aside class="metric-card methodology" aria-labelledby="cwe-method-title"><p class="eyebrow">How it works</p><h3 id="cwe-method-title">Calculating the top five</h3><p class="methodology-copy">The watchlist groups CISA Known Exploited Vulnerabilities by CWE, then scores each weakness using exploited vulnerability volume, ransomware campaigns, recent activity, and FIRST EPSS percentile.</p></aside>
+        <section class="section-head"><div><p class="eyebrow">Top five · CISA KEV + EPSS</p><h2>Watchlist</h2></div><div class="section-actions"><button class="text-button" id="download-report" type="button" disabled>Download PDF ↓</button><button class="text-button refresh-data" type="button">Refresh data ↻</button></div></section>
+        <section class="weakness-grid" id="weakness-grid" aria-live="polite"><p class="loading">Loading live CWE records…</p></section>
+        <section class="lookup-panel"><div><p class="eyebrow">CWE record lookup</p><h2>Inspect a<br /><em>weakness.</em></h2></div><div class="lookup-content"><form id="lookup-form"><label for="cwe-id">CWE identifier</label><div class="input-row"><input id="cwe-id" name="cwe-id" inputmode="numeric" pattern="[0-9]+" placeholder="e.g. 79" required /><button type="submit">Search <span>↗</span></button></div></form><p class="form-hint">Enter the numeric part of a CWE ID. Try <button class="example-id" type="button" data-id="89">89</button> or <button class="example-id" type="button" data-id="787">787</button>.</p></div></section>
+        <section class="record-result" id="record-result" aria-live="polite" hidden></section>
       </section>
 
-      <section class="metrics-grid" aria-label="CWE catalog overview">
-        <article class="metric-card highlight"><p>Catalog version</p><strong id="content-version">Loading…</strong><span id="content-date">Fetching current release</span></article>
-        <article class="metric-card"><p>Total weaknesses</p><strong id="weakness-count">—</strong><span>Defined software weaknesses</span></article>
-        <article class="metric-card"><p>Categories</p><strong id="category-count">—</strong><span>Organized CWE groupings</span></article>
-        <article class="metric-card"><p>Views</p><strong id="view-count">—</strong><span>Catalog perspectives</span></article>
+      <section class="view-panel" id="cwe-charts" data-title="CWE / Data charts">
+        <header class="page-heading"><p class="eyebrow">Weakness intelligence · Visual analysis</p><h1>CWE data<br /><em>charts.</em></h1><p>Compare the signals driving the current top-five weakness ranking.</p></header>
+        <section class="chart-grid" id="cwe-chart-grid"><p class="loading">Loading CWE chart data…</p></section>
       </section>
 
-      <aside class="metric-card methodology" aria-labelledby="methodology-title">
-        <p class="eyebrow">How it works</p>
-        <h3 id="methodology-title">Calculating the top five</h3>
-        <p class="methodology-copy">The watchlist groups vulnerabilities from CISA’s Known Exploited Vulnerabilities catalog by CWE, then prioritizes weaknesses linked to more exploited vulnerabilities, recent activity, and ransomware. FIRST EPSS data adds context about the likelihood of future exploitation. The resulting score is a project-specific guide, not an official risk rating.</p>
-      </aside>
-
-      <section class="section-head" id="weaknesses"><div><p class="eyebrow">Top five · CISA KEV + EPSS</p><h2>Watchlist</h2></div><div class="section-actions"><button class="text-button" id="download-report" type="button" disabled>Download PDF ↓</button><button class="text-button" id="refresh-data" type="button">Refresh data ↻</button></div></section>
-      <section class="weakness-grid" id="weakness-grid" aria-live="polite">
-        <p class="loading">Loading live CWE records…</p>
+      <section class="view-panel" id="cve-watchlist" data-title="CVE / Top 5">
+        <header class="intro"><div><p class="eyebrow"><span class="live-dot"></span> Active vulnerability intelligence</p><h1>CVE threats,<br /><em>right now.</em></h1></div><p class="intro-copy">Recently exploited vulnerabilities ranked by real-world activity, ransomware use, exploit probability, recency, and technical severity.</p></header>
+        <section class="metrics-grid" aria-label="CVE watchlist overview">
+          <article class="metric-card highlight"><p>Tracking window</p><strong id="cve-window">—</strong><span>Recent KEV additions</span></article>
+          <article class="metric-card"><p>Active candidates</p><strong id="cve-candidate-count">—</strong><span>CVEs evaluated</span></article>
+          <article class="metric-card"><p>Ransomware linked</p><strong id="cve-ransomware-count">—</strong><span>Within the top five</span></article>
+          <article class="metric-card"><p>Catalog release</p><strong class="metric-date" id="cve-catalog-date">—</strong><span>CISA KEV snapshot</span></article>
+        </section>
+        <aside class="metric-card methodology"><p class="eyebrow">How it works</p><h3>Calculating the CVE top five</h3><p class="methodology-copy">Candidates are CVEs added to CISA KEV in the past year. Confirmed exploitation is the baseline; ransomware evidence, addition recency, FIRST EPSS probability, and NVD CVSS severity determine the order.</p></aside>
+        <section class="section-head"><div><p class="eyebrow">Top five · KEV + EPSS + NVD</p><h2>Watchlist</h2></div><button class="text-button refresh-data" type="button">Refresh data ↻</button></section>
+        <section class="weakness-grid" id="cve-grid" aria-live="polite"><p class="loading">Loading live CVE records…</p></section>
+        <section class="lookup-panel cve-lookup"><div><p class="eyebrow">CVE record lookup</p><h2>Inspect a<br /><em>vulnerability.</em></h2></div><div class="lookup-content"><form id="cve-lookup-form"><label for="cve-id">CVE identifier</label><div class="input-row"><input id="cve-id" name="cve-id" placeholder="e.g. CVE-2021-44228" pattern="(?:CVE-)?[0-9]{4}-[0-9]{4,}" required /><button type="submit">Search <span>↗</span></button></div></form><p class="form-hint">Enter a complete CVE identifier, with or without the CVE prefix.</p></div></section>
+        <section class="record-result" id="cve-record-result" aria-live="polite" hidden></section>
       </section>
 
-      <section class="lookup-panel" id="lookup">
-        <div><p class="eyebrow">CWE record lookup</p><h2>Inspect a<br /><em>weakness.</em></h2></div>
-        <div class="lookup-content"><form id="lookup-form"><label for="cwe-id">CWE identifier</label><div class="input-row"><input id="cwe-id" name="cwe-id" inputmode="numeric" pattern="[0-9]+" placeholder="e.g. 79" required /><button type="submit">Search <span>↗</span></button></div></form><p class="form-hint">Enter the numeric part of a CWE ID. For example: <button class="example-id" type="button" data-id="89">89</button>, <button class="example-id" type="button" data-id="787">787</button>.</p></div>
+      <section class="view-panel" id="cve-charts" data-title="CVE / Data charts">
+        <header class="page-heading"><p class="eyebrow">Vulnerability intelligence · Visual analysis</p><h1>CVE data<br /><em>charts.</em></h1><p>See why each actively exploited vulnerability is rising to the top.</p></header>
+        <section class="chart-grid" id="cve-chart-grid"><p class="loading">Loading CVE chart data…</p></section>
       </section>
-      <section class="record-result" id="record-result" aria-live="polite" hidden></section>
     </main>
-    <footer><span>CWE Watch</span><span class="creator-credit">Vibe Coded by <a href="https://github.com/NoDisassemble" target="_blank" rel="noreferrer">NoDisassemble</a></span><span>Data: MITRE CWE REST API</span><a href="https://github.com/CWE-CAPEC/REST-API-wg/blob/main/openapi.json" target="_blank" rel="noreferrer">API documentation ↗</a></footer>
+
+    <footer><span>Threat Watch</span><span class="creator-credit">Vibe Coded by <a href="https://github.com/NoDisassemble" target="_blank" rel="noreferrer">NoDisassemble</a></span><span>Data: MITRE · CISA · FIRST · NVD</span></footer>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" referrerpolicy="no-referrer"></script>
     <script src="script.js"></script>
   </body>

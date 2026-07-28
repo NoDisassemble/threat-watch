@@ -1,1 +1,3 @@
 .watchlist-cache.json
+.cve-watchlist-cache.json
+__pycache__/
