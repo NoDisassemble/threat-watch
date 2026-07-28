@@ -102,14 +102,59 @@ function barRows(items, value, label, maxValue = null) {
     return `<div class="bar-row"><div class="bar-label"><span>${escapeHtml(label(item))}</span><strong>${amount}</strong></div><div class="bar-track"><span style="width:${width}%"></span></div></div>`;
   }).join('');
 }
-function renderCweCharts(items) {
+
+const lineColors = ['#ff5c35', '#1f8a70', '#7c5cff', '#d49b00', '#3273dc'];
+
+function formatMonth(month) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  return new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(year, monthNumber - 1, 1)));
+}
+
+function lineChart(series, ariaLabel, yAxisLabel = 'Cumulative KEV count', xAxisLabel = 'Catalog addition month') {
+  const validSeries = series.filter((item) => item.points?.length);
+  if (!validSeries.length) return '<p class="chart-empty">Timeline data is unavailable.</p>';
+
+  const width = 720;
+  const height = 300;
+  const plot = { left: 68, right: 18, top: 18, bottom: 62 };
+  const points = validSeries[0].points;
+  const maxValue = Math.max(1, ...validSeries.flatMap((item) => item.points.map((point) => Number(point.count) || 0)));
+  const niceMax = Math.ceil(maxValue / Math.max(1, Math.pow(10, Math.floor(Math.log10(maxValue))))) * Math.max(1, Math.pow(10, Math.floor(Math.log10(maxValue))));
+  const x = (index) => plot.left + index * (width - plot.left - plot.right) / Math.max(1, points.length - 1);
+  const y = (value) => plot.top + (niceMax - value) * (height - plot.top - plot.bottom) / niceMax;
+  const ticks = [0, .25, .5, .75, 1];
+  const labelIndexes = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
+
+  const grid = ticks.map((tick) => {
+    const value = Math.round(niceMax * tick);
+    return `<g><line class="line-grid" x1="${plot.left}" y1="${y(value)}" x2="${width - plot.right}" y2="${y(value)}"></line><text class="line-axis-label" x="${plot.left - 10}" y="${y(value) + 4}" text-anchor="end">${value}</text></g>`;
+  }).join('');
+  const xLabels = labelIndexes.map((index) => `<text class="line-axis-label" x="${x(index)}" y="${height - 32}" text-anchor="middle">${formatMonth(points[index].month)}</text>`).join('');
+  const plotMiddleY = (plot.top + height - plot.bottom) / 2;
+  const axisTitles = `<text class="line-axis-title" x="${(plot.left + width - plot.right) / 2}" y="${height - 6}" text-anchor="middle">${escapeHtml(xAxisLabel)}</text><text class="line-axis-title" x="14" y="${plotMiddleY}" text-anchor="middle" transform="rotate(-90 14 ${plotMiddleY})">${escapeHtml(yAxisLabel)}</text>`;
+  const paths = validSeries.map((item, seriesIndex) => {
+    const color = lineColors[seriesIndex % lineColors.length];
+    const path = item.points.map((point, index) => `${index ? 'L' : 'M'} ${x(index).toFixed(1)} ${y(Number(point.count) || 0).toFixed(1)}`).join(' ');
+    const markers = item.points.map((point, index) => `<circle cx="${x(index)}" cy="${y(Number(point.count) || 0)}" r="3" fill="${color}"><title>${escapeHtml(item.label)} · ${formatMonth(point.month)}: ${Number(point.count).toLocaleString()}</title></circle>`).join('');
+    return `<g><path class="line-series" d="${path}" stroke="${color}"></path>${markers}</g>`;
+  }).join('');
+  const legend = validSeries.map((item, index) => `<span><i style="--series-color:${lineColors[index % lineColors.length]}"></i>${escapeHtml(item.label)}</span>`).join('');
+
+  return `<div class="line-chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ariaLabel)}">${grid}${xLabels}${axisTitles}${paths}</svg><div class="line-legend">${legend}</div></div>`;
+}
+
+function renderCweCharts(items, timeline = []) {
+  const timelineSeries = timeline.map((item) => ({ label: item.id, points: item.points }));
   document.querySelector('#cwe-chart-grid').innerHTML = `
+    <article class="chart-card chart-wide"><p class="eyebrow">Exploited over time</p><h3>Cumulative KEV additions by weakness</h3><p class="chart-note">Cumulative vulnerabilities in CISA's KEV catalog, grouped by the current top CWEs. Dates reflect catalog additions.</p>${lineChart(timelineSeries, 'Cumulative CISA KEV additions over the last 12 months by CWE')}</article>
     <article class="chart-card chart-wide"><p class="eyebrow">Composite ranking</p><h3>Threat score</h3>${barRows(items, (x) => x.threat_score, (x) => `CWE-${x.ID}`, 100)}</article>
     <article class="chart-card"><p class="eyebrow">Observed exploitation</p><h3>KEV volume</h3>${barRows(items, (x) => x.kev_count, (x) => `CWE-${x.ID}`)}</article>
     <article class="chart-card"><p class="eyebrow">Exploit likelihood</p><h3>EPSS percentile</h3>${barRows(items, (x) => x.epss_percentile, (x) => `CWE-${x.ID}`, 100)}</article>`;
 }
-function renderCveCharts(items) {
+function renderCveCharts(items, timeline = []) {
   document.querySelector('#cve-chart-grid').innerHTML = `
+    <article class="chart-card chart-wide"><p class="eyebrow">Exploited over time</p><h3>Cumulative KEV additions</h3><p class="chart-note">Cumulative vulnerabilities added to CISA's KEV catalog within the current 365-day candidate window.</p>${lineChart([{ label: 'All CVE candidates', points: timeline }], 'Cumulative CISA KEV additions in the current CVE candidate window')}</article>
     <article class="chart-card chart-wide"><p class="eyebrow">Composite ranking</p><h3>Threat score</h3>${barRows(items, (x) => x.threat_score, (x) => x.id, 100)}</article>
     <article class="chart-card"><p class="eyebrow">30-day probability</p><h3>EPSS probability</h3>${barRows(items, (x) => x.epss_probability, (x) => x.id, 100)}</article>
     <article class="chart-card"><p class="eyebrow">Technical severity</p><h3>CVSS base score</h3>${barRows(items, (x) => x.cvss_score || 0, (x) => x.id, 10)}</article>`;
@@ -118,19 +163,45 @@ function renderCveCharts(items) {
 async function loadCweDashboard() {
   document.querySelector('#weakness-grid').innerHTML = '<p class="loading">Loading live CWE records…</p>';
   try {
-    const [version, watchlist] = await Promise.all([get('/cwe/version'), getLocal('/api/watchlist')]);
+    const watchlist = await getLocal('/api/watchlist');
     if (!watchlist.items?.length) throw new Error(watchlist.error || 'No threat-ranked CWEs were returned.');
-    const response = await get(`/cwe/weakness/${watchlist.items.map((item) => item.id).join(',')}`);
-    document.querySelector('#content-version').textContent = `v${version.ContentVersion || '—'}`;
-    document.querySelector('#content-date').textContent = version.ContentDate ? `Released ${version.ContentDate.trim()}` : 'Current release';
-    document.querySelector('#weakness-count').textContent = Number(version.TotalWeaknesses || 0).toLocaleString();
-    document.querySelector('#category-count').textContent = Number(version.TotalCategories || 0).toLocaleString();
-    document.querySelector('#view-count').textContent = Number(version.TotalViews || 0).toLocaleString();
-    const ranks = new Map(watchlist.items.map((item) => [item.id, item]));
-    cweRecords = (response.Weaknesses || []).map((item) => ({ ...item, ...ranks.get(item.ID) })).sort((a, b) => b.threat_score - a.threat_score);
-    document.querySelector('#download-report').disabled = !cweRecords.length;
+    const ids = watchlist.items.map((item) => item.id).join(',');
+    document.querySelector('#content-version').textContent = 'Unavailable';
+    document.querySelector('#content-date').textContent = 'Loading MITRE catalog metadata…';
+    document.querySelector('#weakness-count').textContent = '—';
+    document.querySelector('#category-count').textContent = '—';
+    document.querySelector('#view-count').textContent = '—';
+    cweRecords = watchlist.items.map((rank) => ({
+      ID: rank.id,
+      Name: `CWE-${rank.id}`,
+      Description: 'Detailed weakness metadata is temporarily unavailable from the MITRE CWE API.',
+      ...rank,
+    })).sort((a, b) => b.threat_score - a.threat_score);
+    document.querySelector('#download-report').disabled = false;
     renderCweCards(cweRecords);
-    renderCweCharts(cweRecords);
+    renderCweCharts(cweRecords, watchlist.exploitation_timeline);
+
+    const [versionResult, weaknessResult] = await Promise.allSettled([
+      get('/cwe/version'),
+      get(`/cwe/weakness/${ids}`),
+    ]);
+    const version = versionResult.status === 'fulfilled' ? versionResult.value : null;
+    const weaknesses = weaknessResult.status === 'fulfilled' ? weaknessResult.value.Weaknesses || [] : [];
+
+    document.querySelector('#content-version').textContent = version?.ContentVersion ? `v${version.ContentVersion}` : 'Unavailable';
+    document.querySelector('#content-date').textContent = version?.ContentDate ? `Released ${version.ContentDate.trim()}` : 'MITRE API temporarily unavailable';
+    document.querySelector('#weakness-count').textContent = version ? Number(version.TotalWeaknesses || 0).toLocaleString() : '—';
+    document.querySelector('#category-count').textContent = version ? Number(version.TotalCategories || 0).toLocaleString() : '—';
+    document.querySelector('#view-count').textContent = version ? Number(version.TotalViews || 0).toLocaleString() : '—';
+    const details = new Map(weaknesses.map((item) => [String(item.ID), item]));
+    cweRecords = watchlist.items.map((rank) => ({
+      ID: rank.id,
+      Name: `CWE-${rank.id}`,
+      Description: 'Detailed weakness metadata is temporarily unavailable from the MITRE CWE API.',
+      ...details.get(String(rank.id)),
+      ...rank,
+    })).sort((a, b) => b.threat_score - a.threat_score);
+    renderCweCards(cweRecords);
   } catch (error) {
     cweRecords = [];
     document.querySelector('#download-report').disabled = true;
@@ -150,7 +221,7 @@ async function loadCveDashboard() {
     document.querySelector('#cve-ransomware-count').textContent = cveRecords.filter((item) => item.ransomware).length;
     document.querySelector('#cve-catalog-date').textContent = formatDate(watchlist.catalog_date);
     renderCveCards(cveRecords);
-    renderCveCharts(cveRecords);
+    renderCveCharts(cveRecords, watchlist.exploitation_timeline);
   } catch (error) {
     cveRecords = [];
     document.querySelector('#cve-grid').innerHTML = `<p class="loading error">Unable to load live CVE data. ${escapeHtml(error.message)}</p>`;

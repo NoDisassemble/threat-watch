@@ -25,6 +25,27 @@ CACHE_FILE = Path(__file__).with_name(".watchlist-cache.json")
 CVE_CACHE_FILE = Path(__file__).with_name(".cve-watchlist-cache.json")
 OWASP_MAP_FILE = Path(__file__).with_name("owasp_2025.json")
 CACHE_MAX_AGE = timedelta(hours=24)
+# Thirteen calendar buckets cover the rolling 365-day window, including both
+# partial boundary months.
+TIMELINE_MONTHS = 13
+
+
+def month_key(value):
+    """Return a sortable YYYY-MM key for an ISO date, or None when invalid."""
+    try:
+        return datetime.fromisoformat(value).date().strftime("%Y-%m")
+    except (TypeError, ValueError):
+        return None
+
+
+def recent_months(today, count=TIMELINE_MONTHS):
+    """Return the most recent calendar months in chronological order."""
+    months = []
+    year, month = today.year, today.month
+    for offset in range(count - 1, -1, -1):
+        index = year * 12 + month - 1 - offset
+        months.append(f"{index // 12:04d}-{index % 12 + 1:02d}")
+    return months
 
 
 def load_owasp_mappings():
@@ -190,7 +211,8 @@ def get_cve_watchlist():
         try:
             cached = json.loads(CVE_CACHE_FILE.read_text(encoding="utf-8"))
             created = datetime.fromisoformat(cached["created_at"])
-            if datetime.now(timezone.utc) - created < CACHE_MAX_AGE:
+            if (datetime.now(timezone.utc) - created < CACHE_MAX_AGE
+                    and "exploitation_timeline" in cached["data"]):
                 return cached["data"]
         except (OSError, json.JSONDecodeError, KeyError, ValueError):
             pass
@@ -201,6 +223,8 @@ def get_cve_watchlist():
 
     today = datetime.now(timezone.utc).date()
     cutoff = today - timedelta(days=365)
+    timeline_months = recent_months(today)
+    monthly_kev_additions = defaultdict(int)
     candidates = []
     for vulnerability in catalog.get("vulnerabilities", []):
         cve_id = vulnerability.get("cveID")
@@ -210,6 +234,7 @@ def get_cve_watchlist():
             continue
         if not cve_id or date_added < cutoff:
             continue
+        monthly_kev_additions[date_added.strftime("%Y-%m")] += 1
         candidates.append({
             "id": cve_id,
             "vendor": vulnerability.get("vendorProject", "Unknown vendor"),
@@ -248,12 +273,18 @@ def get_cve_watchlist():
         item["threat_score"] = round(min(100, item["threat_score"] + cvss), 1)
 
     preliminary.sort(key=lambda item: item["threat_score"], reverse=True)
+    running_total = 0
+    exploitation_timeline = []
+    for month in timeline_months:
+        running_total += monthly_kev_additions[month]
+        exploitation_timeline.append({"month": month, "count": running_total})
     data = {
         "items": preliminary[:5],
         "catalog_date": catalog.get("dateReleased"),
         "candidate_count": len(candidates),
         "method": "CISA KEV + FIRST EPSS + NVD CVSS",
         "window_days": 365,
+        "exploitation_timeline": exploitation_timeline,
     }
     try:
         CVE_CACHE_FILE.write_text(json.dumps({
@@ -269,7 +300,8 @@ def get_threat_watchlist():
     if CACHE_FILE.exists():
         cached = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
         created = datetime.fromisoformat(cached["created_at"])
-        if datetime.now(timezone.utc) - created < CACHE_MAX_AGE:
+        if (datetime.now(timezone.utc) - created < CACHE_MAX_AGE
+                and "exploitation_timeline" in cached["data"]):
             return add_owasp_mappings(cached["data"])
 
     catalog = load_kev_catalog()
@@ -277,7 +309,8 @@ def get_threat_watchlist():
         return {"items": [], "error": "Unable to load the CISA KEV catalog."}
 
     cutoff = datetime.now(timezone.utc).date() - timedelta(days=365)
-    groups = defaultdict(lambda: {"cves": [], "ransomware": 0, "recent": 0})
+    timeline_months = recent_months(datetime.now(timezone.utc).date())
+    groups = defaultdict(lambda: {"cves": [], "ransomware": 0, "recent": 0, "dates": []})
     for vulnerability in catalog.get("vulnerabilities", []):
         cve_id = vulnerability.get("cveID")
         if not cve_id:
@@ -291,6 +324,9 @@ def get_threat_watchlist():
             group["cves"].append(cve_id)
             group["ransomware"] += int(is_ransomware)
             group["recent"] += int(is_recent)
+            added_month = month_key(vulnerability.get("dateAdded"))
+            if added_month:
+                group["dates"].append(added_month)
 
     # CISA KEV is the primary signal: every count represents a CVE exploited in the wild.
     ranked = sorted(groups.items(), key=lambda pair: len(pair[1]["cves"]) * 10 + pair[1]["ransomware"] * 20 + pair[1]["recent"] * 25, reverse=True)[:5]
@@ -308,7 +344,22 @@ def get_threat_watchlist():
             "epss_percentile": round(average_epss * 100, 1), "threat_score": round(score, 1),
         })
 
-    data = {"items": items, "catalog_date": catalog.get("dateReleased"), "method": "CISA KEV + EPSS"}
+    exploitation_timeline = []
+    for cwe, group in ranked:
+        exploitation_timeline.append({
+            "id": cwe,
+            "points": [
+                {"month": month, "count": sum(added <= month for added in group["dates"])}
+                for month in timeline_months
+            ],
+        })
+
+    data = {
+        "items": items,
+        "catalog_date": catalog.get("dateReleased"),
+        "method": "CISA KEV + EPSS",
+        "exploitation_timeline": exploitation_timeline,
+    }
     add_owasp_mappings(data)
     CACHE_FILE.write_text(json.dumps({"created_at": datetime.now(timezone.utc).isoformat(), "data": data}), encoding="utf-8")
     return data

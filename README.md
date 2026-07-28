@@ -10,6 +10,7 @@ The dashboard includes separate top-five watchlists and data-chart views for CWE
 - Ranks five high-priority weaknesses using CISA KEV, ransomware, recency, and EPSS signals
 - Ranks five recently exploited CVEs using KEV, ransomware, recency, EPSS, and CVSS signals
 - Provides separate CWE and CVE chart views through a persistent side navigation
+- Charts cumulative CISA KEV catalog additions over the rolling 365-day window
 - Shows threat scores and full descriptions for watchlist entries
 - Identifies mappings to ranked OWASP Top 10:2025 risk categories
 - Looks up individual weaknesses by CWE number

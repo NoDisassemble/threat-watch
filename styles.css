@@ -139,6 +139,23 @@ h1 em, h2 em { font-style: normal; font-weight: 400; letter-spacing: -.1em; }
 .bar-track { height: 9px; overflow: hidden; background: color-mix(in srgb, var(--line) 70%, transparent); }
 .bar-track span { display: block; height: 100%; background: var(--accent); transform-origin: left; animation: grow .6s ease-out; }
 @keyframes grow { from { transform: scaleX(0); } }
+.chart-note { max-width: 72ch; margin: -1rem 0 1.5rem; color: var(--muted); font-size: .75rem; line-height: 1.5; }
+.chart-empty { padding: 4rem 1rem; color: var(--muted); text-align: center; font: .7rem "DM Mono", monospace; }
+.line-chart { min-width: 0; }
+.line-chart svg { display: block; width: 100%; min-height: 240px; overflow: visible; }
+.line-grid { stroke: color-mix(in srgb, var(--line) 82%, transparent); stroke-width: 1; }
+.line-axis-label { fill: var(--muted); font: 10px "DM Mono", monospace; }
+.line-axis-title { fill: var(--ink); font: 500 10px "DM Mono", monospace; letter-spacing: .04em; text-transform: uppercase; }
+.line-series { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; animation: draw-line .8s ease-out; }
+.line-chart circle { stroke: var(--surface); stroke-width: 2; }
+.line-legend { display: flex; flex-wrap: wrap; gap: .7rem 1.25rem; margin: .5rem 0 0 3rem; color: var(--muted); font: .63rem "DM Mono", monospace; text-transform: uppercase; }
+.line-legend span { display: inline-flex; align-items: center; gap: .45rem; }
+.line-legend i { width: 1.2rem; height: 3px; background: var(--series-color); }
+@keyframes draw-line { from { stroke-dasharray: 1200; stroke-dashoffset: 1200; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .bar-track span, .line-series { animation: none; }
+}
 
 .lookup-panel { margin-top: 6rem; padding: clamp(2rem, 5vw, 4.5rem); display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; background: var(--accent); color: var(--accent-ink); }
 .lookup-content { align-self: end; }
