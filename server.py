@@ -24,7 +24,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 MITRE_API = "https://cwe-api.mitre.org"
-VERSION = "2.0.0"
+# Single source of truth for API metadata and the version shown in the sidebar.
+VERSION = "2.1.0"
 NVD_API = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 KEV_URLS = (
     "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
@@ -34,13 +35,17 @@ EPSS_API = "https://api.first.org/data/v1/epss"
 CACHE_FILE = Path(__file__).with_name(".watchlist-cache.json")
 CVE_CACHE_FILE = Path(__file__).with_name(".cve-watchlist-cache.json")
 DSHIELD_CACHE_FILE = Path(__file__).with_name(".dshield-cache.json")
+RANSOMWARE_CACHE_FILE = Path(__file__).with_name(".ransomware-cache.json")
 OWASP_MAP_FILE = Path(__file__).with_name("owasp_2025.json")
 CACHE_MAX_AGE = timedelta(hours=24)
 DSHIELD_CACHE_MAX_AGE = timedelta(hours=1)
+RANSOMWARE_CACHE_MAX_AGE = timedelta(hours=1)
 DSHIELD_TOP_IPS_API = "https://isc.sans.edu/api/topips/records/20?json"
 DSHIELD_TOP_PORTS_API = "https://isc.sans.edu/api/topports/records/20?json"
 DSHIELD_INTELFEED_API = "https://isc.sans.edu/api/intelfeed?json"
 DSHIELD_USERNAMES_API = "https://isc.sans.edu/sshallusernames.json"
+RANSOMLOOK_POSTS_API = "https://www.ransomlook.io/api/posts?days=30"
+RANSOMWARE_WINDOW_DAYS = 30
 # Thirteen calendar buckets cover the rolling 365-day window, including both
 # partial boundary months.
 TIMELINE_MONTHS = 13
@@ -49,6 +54,7 @@ STATIC_FILES = {"index.html", "styles.css", "script.js"}
 CWE_REFRESH_LOCK = Lock()
 CVE_REFRESH_LOCK = Lock()
 DSHIELD_REFRESH_LOCK = Lock()
+RANSOMWARE_REFRESH_LOCK = Lock()
 CVE_LOOKUP_REFRESH_LOCK = Lock()
 DSHIELD_IP_REFRESH_LOCK = Lock()
 MITRE_PROXY_REFRESH_LOCK = Lock()
@@ -251,12 +257,48 @@ class DshieldIpResponse(BaseModel):
     error: Optional[str] = None
 
 
+class RansomwareVictimClaim(BaseModel):
+    title: str
+    discovered: str
+
+
+class RansomwareGroupActivity(BaseModel):
+    name: str
+    claim_count: int = 0
+    recent_7d_count: int = 0
+    previous_7d_count: int = 0
+    share_percentage: float = 0
+    last_seen: Optional[str] = None
+    recent_victims: List[RansomwareVictimClaim] = Field(default_factory=list)
+
+
+class DailyActivityPoint(BaseModel):
+    date: str
+    count: int = 0
+
+
+class RansomwareActivityResponse(BaseModel):
+    items: List[RansomwareGroupActivity] = Field(default_factory=list)
+    total_claims: int = 0
+    active_groups: int = 0
+    window_days: int = 30
+    generated_at: Optional[str] = None
+    cache_seconds: int = 0
+    daily_activity: List[DailyActivityPoint] = Field(default_factory=list)
+    source: Optional[str] = None
+    methodology: Optional[str] = None
+    stale: bool = False
+    warning: Optional[str] = None
+    error: Optional[str] = None
+
+
 app = FastAPI(
     title="Threat Watch API",
     summary="Live CWE, CVE, and community honeypot intelligence",
     description=(
         "Backend API for the Threat Watch SPA. It combines MITRE CWE, CISA KEV, "
-        "FIRST EPSS, NVD CVE, and SANS ISC/DShield community telemetry."
+        "FIRST EPSS, NVD CVE, SANS ISC/DShield community telemetry, and "
+        "RansomLook leak-site observations."
     ),
     version=VERSION,
     docs_url="/api/swagger",
@@ -383,6 +425,13 @@ def add_owasp_mappings(data):
     return data
 
 
+@app.get("/api/version", tags=["System"])
+def app_version(response: Response):
+    """Return the current Threat Watch release version for UI branding."""
+    cache_response(response, 3600)
+    return {"version": VERSION}
+
+
 @app.get("/api/watchlist", response_model=CweWatchlistResponse, tags=["CWE"])
 def cwe_watchlist(response: Response):
     """Return the ten highest-ranked weakness patterns."""
@@ -430,6 +479,13 @@ def dshield_activity(response: Response):
     """Return a compact snapshot of public DShield community telemetry."""
     cache_response(response, int(DSHIELD_CACHE_MAX_AGE.total_seconds()))
     return get_dshield_activity()
+
+
+@app.get("/api/ransomware", response_model=RansomwareActivityResponse, tags=["Ransomware"])
+def ransomware_activity(response: Response):
+    """Return ransomware groups ranked by unique public victim claims over 30 days."""
+    cache_response(response, int(RANSOMWARE_CACHE_MAX_AGE.total_seconds()))
+    return get_ransomware_activity()
 
 
 @app.get("/api/dshield/ip/{address}", response_model=DshieldIpResponse, tags=["Honeypots"])
@@ -652,6 +708,135 @@ def get_dshield_activity():
     try:
         DSHIELD_CACHE_FILE.write_text(json.dumps({
             "created_at": datetime.now(timezone.utc).isoformat(), "data": data
+        }), encoding="utf-8")
+    except OSError:
+        pass
+    return data
+
+
+def clean_ransomlook_text(value, max_length):
+    """Normalize untrusted leak-site text before including it in API responses."""
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    text = "".join(character for character in text if character.isprintable())
+    return text[:max_length]
+
+
+def parse_ransomlook_timestamp(value):
+    """Parse a RansomLook discovery timestamp as an aware UTC datetime."""
+    parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+@single_flight(RANSOMWARE_REFRESH_LOCK)
+def get_ransomware_activity():
+    """Rank groups by unique public victim claims in a rolling 30-day window."""
+    cached_data = None
+    if RANSOMWARE_CACHE_FILE.exists():
+        try:
+            cached = json.loads(RANSOMWARE_CACHE_FILE.read_text(encoding="utf-8"))
+            created = datetime.fromisoformat(cached["created_at"])
+            cached_data = cached["data"]
+            if datetime.now(timezone.utc) - created < RANSOMWARE_CACHE_MAX_AGE:
+                return cached_data
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            cached_data = None
+
+    try:
+        payload = fetch_json(RANSOMLOOK_POSTS_API)
+        posts = payload.get("posts") if isinstance(payload, dict) else None
+        if not isinstance(posts, list):
+            raise ValueError("RansomLook returned an unexpected response.")
+    except (HTTPError, URLError, json.JSONDecodeError, TypeError, ValueError):
+        if cached_data:
+            stale_data = dict(cached_data)
+            stale_data.update({
+                "stale": True,
+                "warning": "RansomLook is temporarily unavailable; showing the last cached snapshot.",
+            })
+            return stale_data
+        return {"error": "RansomLook ransomware activity is temporarily unavailable."}
+
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    window_start = today - timedelta(days=RANSOMWARE_WINDOW_DAYS - 1)
+    recent_start = today - timedelta(days=6)
+    previous_start = today - timedelta(days=13)
+    groups = defaultdict(list)
+    group_names = {}
+    seen_claims = set()
+
+    for post in posts:
+        if not isinstance(post, dict):
+            continue
+        group = clean_ransomlook_text(post.get("group_name"), 80)
+        title = clean_ransomlook_text(post.get("post_title"), 180)
+        if not group or not title:
+            continue
+        try:
+            discovered = parse_ransomlook_timestamp(post.get("discovered"))
+        except (TypeError, ValueError):
+            continue
+        if discovered.date() < window_start or discovered > now + timedelta(hours=1):
+            continue
+        canonical_group = group.casefold()
+        key = (canonical_group, title.casefold())
+        if key in seen_claims:
+            continue
+        seen_claims.add(key)
+        group_names.setdefault(canonical_group, group)
+        groups[canonical_group].append({"title": title, "discovered": discovered})
+
+    total_claims = len(seen_claims)
+    ranked_groups = []
+    for canonical_group, claims in groups.items():
+        ordered = sorted(claims, key=lambda item: item["discovered"], reverse=True)
+        recent_count = sum(item["discovered"].date() >= recent_start for item in ordered)
+        previous_count = sum(
+            previous_start <= item["discovered"].date() < recent_start for item in ordered
+        )
+        ranked_groups.append({
+            "name": group_names[canonical_group],
+            "claim_count": len(ordered),
+            "recent_7d_count": recent_count,
+            "previous_7d_count": previous_count,
+            "share_percentage": round(len(ordered) / total_claims * 100, 1) if total_claims else 0,
+            "last_seen": ordered[0]["discovered"].isoformat(),
+            "recent_victims": [
+                {"title": item["title"], "discovered": item["discovered"].isoformat()}
+                for item in ordered[:4]
+            ],
+        })
+    ranked_groups.sort(
+        key=lambda item: (item["claim_count"], item["recent_7d_count"], item["last_seen"]),
+        reverse=True,
+    )
+
+    daily_counts = defaultdict(int)
+    for claims in groups.values():
+        for claim in claims:
+            daily_counts[claim["discovered"].date().isoformat()] += 1
+    daily_activity = [{
+        "date": (window_start + timedelta(days=offset)).isoformat(),
+        "count": daily_counts[(window_start + timedelta(days=offset)).isoformat()],
+    } for offset in range(RANSOMWARE_WINDOW_DAYS)]
+
+    data = {
+        "items": ranked_groups[:10],
+        "total_claims": total_claims,
+        "active_groups": len(groups),
+        "window_days": RANSOMWARE_WINDOW_DAYS,
+        "generated_at": now.isoformat(),
+        "cache_seconds": int(RANSOMWARE_CACHE_MAX_AGE.total_seconds()),
+        "daily_activity": daily_activity,
+        "source": "RansomLook",
+        "methodology": "Unique public victim claims grouped by source-reported ransomware group.",
+        "stale": False,
+    }
+    try:
+        RANSOMWARE_CACHE_FILE.write_text(json.dumps({
+            "created_at": now.isoformat(), "data": data
         }), encoding="utf-8")
     except OSError:
         pass

@@ -26,27 +26,35 @@
           <a href="#overview" data-route="overview" class="active">Overview</a>
         </section>
         <section class="nav-group">
-          <p><span class="nav-index">01</span>CWE watchlist</p>
+          <p><span class="nav-index">01</span>Ransomware activity</p>
+          <a href="#ransomware-watchlist" data-route="ransomware-watchlist">Top 10</a>
+          <a href="#ransomware-charts" data-route="ransomware-charts">Data charts</a>
+        </section>
+        <section class="nav-group">
+          <p><span class="nav-index">02</span>CWE watchlist</p>
           <a href="#cwe-watchlist" data-route="cwe-watchlist">Top 10</a>
           <a href="#cwe-charts" data-route="cwe-charts">Data charts</a>
         </section>
         <section class="nav-group">
-          <p><span class="nav-index">02</span>CVE watchlist</p>
+          <p><span class="nav-index">03</span>CVE watchlist</p>
           <a href="#cve-watchlist" data-route="cve-watchlist">Top 10</a>
           <a href="#cve-charts" data-route="cve-charts">Data charts</a>
         </section>
         <section class="nav-group">
-          <p><span class="nav-index">03</span>Honeypot activity</p>
+          <p><span class="nav-index">04</span>Honeypot activity</p>
           <a href="#dshield-activity" data-route="dshield-activity">DShield live feed</a>
           <a href="#dshield-charts" data-route="dshield-charts">Data charts</a>
         </section>
       </nav>
-      <div class="sidebar-status"><span class="live-dot"></span><span>Sources connected</span></div>
+      <div class="sidebar-footer">
+        <div class="sidebar-status"><span class="live-dot"></span><span>Sources connected</span></div>
+        <div class="sidebar-version" aria-label="Threat Watch release version">Threat Watch <span id="app-version">v2.1.0</span></div>
+      </div>
     </aside>
 
     <main class="dashboard-shell">
       <section class="view-panel active" id="overview" data-title="Dashboard / Overview">
-        <header class="page-heading overview-heading"><p class="eyebrow"><span class="live-dot"></span> Unified security intelligence</p><h2>Threats,<br /><em>at a glance.</em></h2><p>Three live perspectives on software weaknesses, actively exploited vulnerabilities, and attack traffic observed by community honeypots.</p></header>
+        <header class="page-heading overview-heading"><p class="eyebrow"><span class="live-dot"></span> Unified security intelligence</p><h2>Threats,<br /><em>at a glance.</em></h2><p>Four live perspectives on ransomware leak-site activity, software weaknesses, actively exploited vulnerabilities, and community honeypot traffic.</p></header>
         <section class="overview-stack" id="overview-cards" aria-live="polite">
           <article class="overview-card overview-loading"><p class="loading">Loading dashboard snapshots…</p></article>
         </section>
@@ -117,9 +125,30 @@
         <section class="chart-grid" id="dshield-chart-grid" aria-live="polite"><p class="loading">Loading DShield chart data…</p></section>
         <p class="source-credit">Data provided by <a href="https://isc.sans.edu/" target="_blank" rel="noreferrer">SANS Technology Institute, Internet Storm Center ↗</a>. DShield data may not be resold.</p>
       </section>
+
+      <section class="view-panel" id="ransomware-watchlist" data-title="Ransomware / Top 10">
+        <header class="intro"><div><p class="eyebrow"><span class="live-dot"></span> Public leak-site intelligence</p><h2>Ransomware groups,<br /><em>most active.</em></h2></div><p class="intro-copy">Groups ranked by unique victim claims publicly observed by RansomLook during the rolling 30-day window.</p></header>
+        <section class="metrics-grid" aria-label="Ransomware activity overview">
+          <article class="metric-card highlight"><p>Observed claims</p><strong id="ransomware-total-claims">—</strong><span>Unique claims in 30 days</span></article>
+          <article class="metric-card"><p>Active groups</p><strong id="ransomware-active-groups">—</strong><span>Groups with observed claims</span></article>
+          <article class="metric-card"><p>Leading share</p><strong id="ransomware-leading-share">—</strong><span>Share held by the top group</span></article>
+          <article class="metric-card"><p>Last refreshed</p><strong class="metric-date" id="ransomware-updated">—</strong><span>Cached for one hour</span></article>
+        </section>
+        <aside class="metric-card methodology"><p class="eyebrow">How it works</p><h3>Calculating the ransomware top ten</h3><p class="methodology-copy">Threat Watch deduplicates RansomLook posts by group and victim title, limits the data to the latest 30 calendar days, then ranks groups by claim volume with seven-day activity as a tie-breaker. Claims are unverified leak-site assertions—not confirmed intrusions, payments, or a complete measure of ransomware impact.</p></aside>
+        <section class="section-head"><div><p class="eyebrow">Top ten · 30-day public claims</p><h2>Watchlist</h2></div><button class="text-button ransomware-refresh" type="button">Refresh data ↻</button></section>
+        <div id="ransomware-notices" aria-live="polite"></div>
+        <section class="weakness-grid" id="ransomware-grid" aria-live="polite"><p class="loading">Loading ransomware activity…</p></section>
+        <p class="source-credit">Activity data provided by <a href="https://www.ransomlook.io/" target="_blank" rel="noreferrer">RansomLook ↗</a>. Victim claims are observational intelligence and may be incomplete, duplicated at the source, or incorrectly attributed.</p>
+      </section>
+
+      <section class="view-panel" id="ransomware-charts" data-title="Ransomware / Data charts">
+        <header class="page-heading"><p class="eyebrow">Ransomware leak-site intelligence · Visual analysis</p><h2>Ransomware data<br /><em>charts.</em></h2><p>Compare 30-day claim volume, current seven-day activity, group share, and the daily discovery timeline.</p></header>
+        <section class="chart-grid" id="ransomware-chart-grid" aria-live="polite"><p class="loading">Loading ransomware chart data…</p></section>
+        <p class="source-credit">Activity data provided by <a href="https://www.ransomlook.io/" target="_blank" rel="noreferrer">RansomLook ↗</a>. Counts represent publicly observed victim claims, not independently confirmed attacks.</p>
+      </section>
     </main>
 
-    <footer><span>Threat Watch</span><span class="creator-credit">Vibe Coded by <a href="https://github.com/NoDisassemble" target="_blank" rel="noreferrer">NoDisassemble</a></span><span>Data: MITRE · CISA · FIRST · NVD · DShield</span></footer>
+    <footer><span>Threat Watch</span><span class="creator-credit">Vibe Coded by <a href="https://github.com/NoDisassemble" target="_blank" rel="noreferrer">NoDisassemble</a></span><span>Data: MITRE · CISA · FIRST · NVD · DShield · RansomLook</span></footer>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" referrerpolicy="no-referrer"></script>
     <script src="script.js"></script>
   </body>

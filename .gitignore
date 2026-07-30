@@ -1,4 +1,5 @@
 .watchlist-cache.json
 .cve-watchlist-cache.json
 .dshield-cache.json
+.ransomware-cache.json
 __pycache__/

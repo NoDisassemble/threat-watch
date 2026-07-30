@@ -1,7 +1,19 @@
 const API_BASE = '/api/v1';
 let cweRecords = [];
 let cveRecords = [];
-const overviewState = { cwe: null, cve: null, dshield: null };
+const overviewState = { cwe: null, cve: null, dshield: null, ransomware: null };
+
+async function loadAppVersion() {
+  try {
+    const response = await fetch('/api/version');
+    if (!response.ok) return;
+    const data = await response.json();
+    document.querySelector('#app-version').textContent = `v${String(data.version).replace(/^v/i, '')}`;
+  } catch (_) {
+    // Keep the version embedded in the page when the API is unavailable.
+  }
+}
+loadAppVersion();
 
 const themeButton = document.querySelector('.theme-toggle');
 function setTheme(theme) {
@@ -69,6 +81,9 @@ function formatDateTime(value) {
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 function number(value) { return Number(value || 0).toLocaleString(); }
+function displayGroupName(value) {
+  return cleanText(value).replace(/\b[a-z]/g, (character) => character.toUpperCase());
+}
 
 function renderCweCards(items) {
   document.querySelector('#weakness-grid').innerHTML = items.map((item, index) => {
@@ -101,6 +116,22 @@ function renderCveCards(items) {
   }).join('');
 }
 
+function renderRansomwareCards(items) {
+  document.querySelector('#ransomware-grid').innerHTML = items.map((item, index) => {
+    const momentum = Number(item.recent_7d_count || 0) - Number(item.previous_7d_count || 0);
+    const claims = (item.recent_victims || []).map((claim) => `<li><span>${escapeHtml(claim.title)}</span><time datetime="${escapeHtml(claim.discovered)}">${formatDate(claim.discovered)}</time></li>`).join('');
+    return `<article class="weakness-card ranked-card ransomware-card">
+      <div class="rank-number">${String(index + 1).padStart(2, '0')}</div>
+      <header><span>RansomLook activity</span><span class="status">${number(item.share_percentage)}% share</span></header>
+      <div class="badge-row"><span class="data-badge danger-badge">${number(item.recent_7d_count)} claims · 7d</span><span class="data-badge ${momentum > 0 ? 'kev-badge' : 'muted-badge'}">Momentum ${momentum > 0 ? '+' : ''}${number(momentum)}</span></div>
+      <h3>${escapeHtml(displayGroupName(item.name))}</h3>
+      <p>Most recently observed public victim claims:</p>
+      ${claims ? `<ul class="claim-list">${claims}</ul>` : '<p class="chart-empty">No recent claim titles were returned.</p>'}
+      <footer>${number(item.claim_count)} claims in 30 days · Last seen ${formatDateTime(item.last_seen)}</footer>
+    </article>`;
+  }).join('');
+}
+
 function barRows(items, value, label, maxValue = null) {
   const maximum = maxValue || Math.max(...items.map(value), 1);
   return items.map((item) => {
@@ -129,6 +160,25 @@ function overviewPlaceholder(domain, message = 'Loading live snapshot…') {
 
 function renderOverview() {
   const cards = [];
+  const ransomware = overviewState.ransomware;
+  if (ransomware?.error) {
+    cards.push(overviewPlaceholder('Ransomware', ransomware.error));
+  } else if (ransomware?.items?.length) {
+    const top = ransomware.items[0];
+    cards.push(overviewCard({
+      domain: 'Ransomware', status: 'RansomLook · 30 days', route: 'ransomware-watchlist',
+      title: displayGroupName(top.name),
+      summary: `${number(top.claim_count)} unique public victim claims were observed for the leading group during the rolling ${number(ransomware.window_days)}-day window. Claims are source-reported and not independently confirmed.`,
+      stats: [
+        { value: number(top.claim_count), label: '30-day claims' },
+        { value: number(top.recent_7d_count), label: 'Latest seven days' },
+        { value: `${number(top.share_percentage)}%`, label: 'Share of all claims' },
+      ],
+      chartTitle: 'Top five groups by claims',
+      chart: barRows(ransomware.items.slice(0, 5), (item) => item.claim_count, (item) => displayGroupName(item.name)),
+    }));
+  } else cards.push(overviewPlaceholder('Ransomware'));
+
   const cwe = overviewState.cwe;
   if (cwe?.error) {
     cards.push(overviewPlaceholder('CWE', cwe.error));
@@ -213,7 +263,13 @@ function formatMonth(month) {
     .format(new Date(Date.UTC(year, monthNumber - 1, 1)));
 }
 
-function lineChart(series, ariaLabel, yAxisLabel = 'Cumulative KEV count', xAxisLabel = 'Catalog addition month') {
+function formatDay(value) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+function lineChart(series, ariaLabel, yAxisLabel = 'Cumulative KEV count', xAxisLabel = 'Catalog addition month', formatBucket = formatMonth) {
   const validSeries = series.filter((item) => item.points?.length);
   if (!validSeries.length) return '<p class="chart-empty">Timeline data is unavailable.</p>';
 
@@ -232,13 +288,13 @@ function lineChart(series, ariaLabel, yAxisLabel = 'Cumulative KEV count', xAxis
     const value = Math.round(niceMax * tick);
     return `<g><line class="line-grid" x1="${plot.left}" y1="${y(value)}" x2="${width - plot.right}" y2="${y(value)}"></line><text class="line-axis-label" x="${plot.left - 10}" y="${y(value) + 4}" text-anchor="end">${value}</text></g>`;
   }).join('');
-  const xLabels = labelIndexes.map((index) => `<text class="line-axis-label" x="${x(index)}" y="${height - 32}" text-anchor="middle">${formatMonth(points[index].month)}</text>`).join('');
+  const xLabels = labelIndexes.map((index) => `<text class="line-axis-label" x="${x(index)}" y="${height - 32}" text-anchor="middle">${formatBucket(points[index].month)}</text>`).join('');
   const plotMiddleY = (plot.top + height - plot.bottom) / 2;
   const axisTitles = `<text class="line-axis-title" x="${(plot.left + width - plot.right) / 2}" y="${height - 6}" text-anchor="middle">${escapeHtml(xAxisLabel)}</text><text class="line-axis-title" x="14" y="${plotMiddleY}" text-anchor="middle" transform="rotate(-90 14 ${plotMiddleY})">${escapeHtml(yAxisLabel)}</text>`;
   const paths = validSeries.map((item, seriesIndex) => {
     const color = lineColors[seriesIndex % lineColors.length];
     const path = item.points.map((point, index) => `${index ? 'L' : 'M'} ${x(index).toFixed(1)} ${y(Number(point.count) || 0).toFixed(1)}`).join(' ');
-    const markers = item.points.map((point, index) => `<circle cx="${x(index)}" cy="${y(Number(point.count) || 0)}" r="3" fill="${color}"><title>${escapeHtml(item.label)} · ${formatMonth(point.month)}: ${Number(point.count).toLocaleString()}</title></circle>`).join('');
+    const markers = item.points.map((point, index) => `<circle cx="${x(index)}" cy="${y(Number(point.count) || 0)}" r="3" fill="${color}"><title>${escapeHtml(item.label)} · ${formatBucket(point.month)}: ${Number(point.count).toLocaleString()}</title></circle>`).join('');
     return `<g><path class="line-series" d="${path}" stroke="${color}"></path>${markers}</g>`;
   }).join('');
   const legend = validSeries.map((item, index) => `<span><i style="--series-color:${lineColors[index % lineColors.length]}"></i>${escapeHtml(item.label)}</span>`).join('');
@@ -303,6 +359,20 @@ function renderDshieldCharts(data) {
     <article class="chart-card"><p class="eyebrow">Cowrie · Last 30 days</p><h3>Attempted SSH usernames</h3><p class="chart-note">The most frequently attempted display-safe usernames collected by DShield Cowrie sensors.</p>${usernames.length ? barRows(usernames, (item) => item.count, (item) => item.username) : empty}</article>`;
 }
 
+function renderRansomwareCharts(data) {
+  const items = data.items || [];
+  const dailySeries = [{
+    label: 'All observed claims',
+    points: (data.daily_activity || []).map((item) => ({ month: item.date, count: item.count })),
+  }];
+  const empty = '<p class="chart-empty">This chart is temporarily unavailable.</p>';
+  document.querySelector('#ransomware-chart-grid').innerHTML = `
+    <article class="chart-card chart-wide"><p class="eyebrow">Discovery timeline · 30 days</p><h3>Daily public victim claims</h3><p class="chart-note">Unique claims across all observed groups, plotted by the date RansomLook first discovered each post.</p>${dailySeries[0].points.length ? lineChart(dailySeries, 'Daily public ransomware victim claims over the last 30 days', 'Observed claims', 'Discovery date', formatDay) : empty}</article>
+    <article class="chart-card chart-wide"><p class="eyebrow">Rolling activity</p><h3>Thirty-day claim volume</h3><p class="chart-note">Unique public victim titles attributed to each group during the current rolling window.</p>${items.length ? barRows(items, (item) => item.claim_count, (item) => displayGroupName(item.name)) : empty}</article>
+    <article class="chart-card"><p class="eyebrow">Current momentum</p><h3>Claims in the latest seven days</h3><p class="chart-note">Recent observations highlight groups whose current activity may differ from their full-window rank.</p>${items.length ? barRows(items, (item) => item.recent_7d_count, (item) => displayGroupName(item.name)) : empty}</article>
+    <article class="chart-card"><p class="eyebrow">Activity concentration</p><h3>Share of all observed claims</h3><p class="chart-note">Each leading group's percentage of unique claims across the complete 30-day dataset.</p>${items.length ? barRows(items, (item) => item.share_percentage, (item) => displayGroupName(item.name), 100) : empty}</article>`;
+}
+
 async function loadDshieldDashboard() {
   document.querySelector('#dshield-feed').innerHTML = '<p class="loading">Loading DShield telemetry…</p>';
   try {
@@ -321,6 +391,28 @@ async function loadDshieldDashboard() {
     overviewState.dshield = { error: error.message };
     document.querySelector('#dshield-feed').innerHTML = `<p class="loading error">Unable to load DShield telemetry. ${escapeHtml(error.message)}</p>`;
     document.querySelector('#dshield-chart-grid').innerHTML = `<p class="loading error">Unable to load DShield charts. ${escapeHtml(error.message)}</p>`;
+    renderOverview();
+  }
+}
+
+async function loadRansomwareDashboard() {
+  document.querySelector('#ransomware-grid').innerHTML = '<p class="loading">Loading ransomware activity…</p>';
+  try {
+    const data = await getLocal('/api/ransomware');
+    if (data.error || !data.items?.length) throw new Error(data.error || 'No ransomware group activity was returned.');
+    overviewState.ransomware = data;
+    document.querySelector('#ransomware-total-claims').textContent = number(data.total_claims);
+    document.querySelector('#ransomware-active-groups').textContent = number(data.active_groups);
+    document.querySelector('#ransomware-leading-share').textContent = `${number(data.items[0]?.share_percentage)}%`;
+    document.querySelector('#ransomware-updated').textContent = formatDateTime(data.generated_at);
+    document.querySelector('#ransomware-notices').innerHTML = data.warning ? `<p class="feed-warning">${escapeHtml(data.warning)}</p>` : '';
+    renderRansomwareCards(data.items);
+    renderRansomwareCharts(data);
+    renderOverview();
+  } catch (error) {
+    overviewState.ransomware = { error: error.message };
+    document.querySelector('#ransomware-grid').innerHTML = `<p class="loading error">Unable to load ransomware activity. ${escapeHtml(error.message)}</p>`;
+    document.querySelector('#ransomware-chart-grid').innerHTML = `<p class="loading error">Unable to load ransomware charts. ${escapeHtml(error.message)}</p>`;
     renderOverview();
   }
 }
@@ -476,6 +568,11 @@ document.querySelector('.dshield-refresh').addEventListener('click', (event) => 
   button.textContent = 'Refreshing…';
   loadDshieldDashboard().finally(() => { button.textContent = 'Refresh data ↻'; });
 });
+document.querySelector('.ransomware-refresh').addEventListener('click', (event) => {
+  const button = event.currentTarget;
+  button.textContent = 'Refreshing…';
+  loadRansomwareDashboard().finally(() => { button.textContent = 'Refresh data ↻'; });
+});
 document.querySelector('#weakness-grid').addEventListener('click', (event) => {
   const button = event.target.closest('.desc-toggle');
   if (!button) return;
@@ -516,4 +613,4 @@ document.querySelector('#download-report').addEventListener('click', () => {
   pdf.save(`threat-watch-cwe-top-10-${new Date().toISOString().slice(0, 10)}.pdf`);
 });
 
-Promise.all([loadCweDashboard(), loadCveDashboard(), loadDshieldDashboard()]);
+Promise.all([loadCweDashboard(), loadCveDashboard(), loadDshieldDashboard(), loadRansomwareDashboard()]);
