@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Live CWE and CVE threat intelligence dashboard." />
-    <title>Threat Watch — CWE &amp; CVE Intelligence</title>
+    <meta name="description" content="Live CWE, CVE, and honeypot threat intelligence dashboard." />
+    <title>Threat Watch — Security Intelligence</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -13,8 +13,8 @@
   <body>
     <header class="topbar">
       <button class="menu-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false">Menu</button>
-      <a class="brand" href="#cwe-watchlist" data-route="cwe-watchlist">THREAT<span>WATCH</span></a>
-      <p class="topbar-context" id="topbar-context">CWE / Top 5</p>
+      <a class="brand" href="#overview" data-route="overview">THREAT<span>WATCH</span></a>
+      <p class="topbar-context" id="topbar-context">Dashboard / Overview</p>
       <button class="theme-toggle" type="button" aria-label="Switch to dark theme" aria-pressed="false"><span aria-hidden="true">◐</span><span class="theme-label">Dark</span></button>
     </header>
 
@@ -22,23 +22,39 @@
       <div class="sidebar-heading"><span>Intelligence</span><small>Live threat data</small></div>
       <nav class="side-nav">
         <section class="nav-group">
+          <p><span class="nav-index">00</span>Dashboard</p>
+          <a href="#overview" data-route="overview" class="active">Overview</a>
+        </section>
+        <section class="nav-group">
           <p><span class="nav-index">01</span>CWE watchlist</p>
-          <a href="#cwe-watchlist" data-route="cwe-watchlist" class="active">Top 5</a>
+          <a href="#cwe-watchlist" data-route="cwe-watchlist">Top 10</a>
           <a href="#cwe-charts" data-route="cwe-charts">Data charts</a>
         </section>
         <section class="nav-group">
           <p><span class="nav-index">02</span>CVE watchlist</p>
-          <a href="#cve-watchlist" data-route="cve-watchlist">Top 5</a>
+          <a href="#cve-watchlist" data-route="cve-watchlist">Top 10</a>
           <a href="#cve-charts" data-route="cve-charts">Data charts</a>
+        </section>
+        <section class="nav-group">
+          <p><span class="nav-index">03</span>Honeypot activity</p>
+          <a href="#dshield-activity" data-route="dshield-activity">DShield live feed</a>
+          <a href="#dshield-charts" data-route="dshield-charts">Data charts</a>
         </section>
       </nav>
       <div class="sidebar-status"><span class="live-dot"></span><span>Sources connected</span></div>
     </aside>
 
     <main class="dashboard-shell">
-      <section class="view-panel active" id="cwe-watchlist" data-title="CWE / Top 5">
+      <section class="view-panel active" id="overview" data-title="Dashboard / Overview">
+        <header class="page-heading overview-heading"><p class="eyebrow"><span class="live-dot"></span> Unified security intelligence</p><h2>Threats,<br /><em>at a glance.</em></h2><p>Three live perspectives on software weaknesses, actively exploited vulnerabilities, and attack traffic observed by community honeypots.</p></header>
+        <section class="overview-stack" id="overview-cards" aria-live="polite">
+          <article class="overview-card overview-loading"><p class="loading">Loading dashboard snapshots…</p></article>
+        </section>
+      </section>
+
+      <section class="view-panel" id="cwe-watchlist" data-title="CWE / Top 10">
         <header class="intro">
-          <div><p class="eyebrow"><span class="live-dot"></span> Live weakness intelligence</p><h1>CWE threats,<br /><em>in focus.</em></h1></div>
+          <div><p class="eyebrow"><span class="live-dot"></span> Live weakness intelligence</p><h2>CWE threats,<br /><em>in focus.</em></h2></div>
           <p class="intro-copy">The software weakness patterns most connected to active exploitation, ransomware, and near-term exploit probability.</p>
         </header>
         <section class="metrics-grid" aria-label="CWE catalog overview">
@@ -47,40 +63,63 @@
           <article class="metric-card"><p>Categories</p><strong id="category-count">—</strong><span>Organized CWE groupings</span></article>
           <article class="metric-card"><p>Views</p><strong id="view-count">—</strong><span>Catalog perspectives</span></article>
         </section>
-        <aside class="metric-card methodology" aria-labelledby="cwe-method-title"><p class="eyebrow">How it works</p><h3 id="cwe-method-title">Calculating the top five</h3><p class="methodology-copy">The watchlist groups CISA Known Exploited Vulnerabilities by CWE, then scores each weakness using exploited vulnerability volume, ransomware campaigns, recent activity, and FIRST EPSS percentile.</p></aside>
-        <section class="section-head"><div><p class="eyebrow">Top five · CISA KEV + EPSS</p><h2>Watchlist</h2></div><div class="section-actions"><button class="text-button" id="download-report" type="button" disabled>Download PDF ↓</button><button class="text-button refresh-data" type="button">Refresh data ↻</button></div></section>
+        <aside class="metric-card methodology" aria-labelledby="cwe-method-title"><p class="eyebrow">How it works</p><h3 id="cwe-method-title">Calculating the top ten</h3><p class="methodology-copy">The watchlist groups CISA Known Exploited Vulnerabilities by CWE, then scores each weakness using exploited vulnerability volume, ransomware campaigns, recent activity, and FIRST EPSS percentile.</p></aside>
+        <section class="section-head"><div><p class="eyebrow">Top ten · CISA KEV + EPSS</p><h2>Watchlist</h2></div><div class="section-actions"><button class="text-button" id="download-report" type="button" disabled>Download PDF ↓</button><button class="text-button refresh-data" type="button">Refresh data ↻</button></div></section>
         <section class="weakness-grid" id="weakness-grid" aria-live="polite"><p class="loading">Loading live CWE records…</p></section>
         <section class="lookup-panel"><div><p class="eyebrow">CWE record lookup</p><h2>Inspect a<br /><em>weakness.</em></h2></div><div class="lookup-content"><form id="lookup-form"><label for="cwe-id">CWE identifier</label><div class="input-row"><input id="cwe-id" name="cwe-id" inputmode="numeric" pattern="[0-9]+" placeholder="e.g. 79" required /><button type="submit">Search <span>↗</span></button></div></form><p class="form-hint">Enter the numeric part of a CWE ID. Try <button class="example-id" type="button" data-id="89">89</button> or <button class="example-id" type="button" data-id="787">787</button>.</p></div></section>
         <section class="record-result" id="record-result" aria-live="polite" hidden></section>
       </section>
 
       <section class="view-panel" id="cwe-charts" data-title="CWE / Data charts">
-        <header class="page-heading"><p class="eyebrow">Weakness intelligence · Visual analysis</p><h1>CWE data<br /><em>charts.</em></h1><p>Compare the signals driving the current top-five weakness ranking.</p></header>
+        <header class="page-heading"><p class="eyebrow">Weakness intelligence · Visual analysis</p><h2>CWE data<br /><em>charts.</em></h2><p>Compare the signals driving the current top-ten weakness ranking.</p></header>
         <section class="chart-grid" id="cwe-chart-grid"><p class="loading">Loading CWE chart data…</p></section>
       </section>
 
-      <section class="view-panel" id="cve-watchlist" data-title="CVE / Top 5">
-        <header class="intro"><div><p class="eyebrow"><span class="live-dot"></span> Active vulnerability intelligence</p><h1>CVE threats,<br /><em>right now.</em></h1></div><p class="intro-copy">Recently exploited vulnerabilities ranked by real-world activity, ransomware use, exploit probability, recency, and technical severity.</p></header>
+      <section class="view-panel" id="cve-watchlist" data-title="CVE / Top 10">
+        <header class="intro"><div><p class="eyebrow"><span class="live-dot"></span> Active vulnerability intelligence</p><h2>CVE threats,<br /><em>right now.</em></h2></div><p class="intro-copy">Recently exploited vulnerabilities ranked by real-world activity, ransomware use, exploit probability, recency, and technical severity.</p></header>
         <section class="metrics-grid" aria-label="CVE watchlist overview">
           <article class="metric-card highlight"><p>Tracking window</p><strong id="cve-window">—</strong><span>Recent KEV additions</span></article>
           <article class="metric-card"><p>Active candidates</p><strong id="cve-candidate-count">—</strong><span>CVEs evaluated</span></article>
-          <article class="metric-card"><p>Ransomware linked</p><strong id="cve-ransomware-count">—</strong><span>Within the top five</span></article>
+          <article class="metric-card"><p>Ransomware linked</p><strong id="cve-ransomware-count">—</strong><span>Within the top ten</span></article>
           <article class="metric-card"><p>Catalog release</p><strong class="metric-date" id="cve-catalog-date">—</strong><span>CISA KEV snapshot</span></article>
         </section>
-        <aside class="metric-card methodology"><p class="eyebrow">How it works</p><h3>Calculating the CVE top five</h3><p class="methodology-copy">Candidates are CVEs added to CISA KEV in the past year. Confirmed exploitation is the baseline; ransomware evidence, addition recency, FIRST EPSS probability, and NVD CVSS severity determine the order.</p></aside>
-        <section class="section-head"><div><p class="eyebrow">Top five · KEV + EPSS + NVD</p><h2>Watchlist</h2></div><button class="text-button refresh-data" type="button">Refresh data ↻</button></section>
+        <aside class="metric-card methodology"><p class="eyebrow">How it works</p><h3>Calculating the CVE top ten</h3><p class="methodology-copy">Candidates are CVEs added to CISA KEV in the past year. Confirmed exploitation is the baseline; ransomware evidence, addition recency, FIRST EPSS probability, and NVD CVSS severity determine the order.</p></aside>
+        <section class="section-head"><div><p class="eyebrow">Top ten · KEV + EPSS + NVD</p><h2>Watchlist</h2></div><button class="text-button refresh-data" type="button">Refresh data ↻</button></section>
         <section class="weakness-grid" id="cve-grid" aria-live="polite"><p class="loading">Loading live CVE records…</p></section>
         <section class="lookup-panel cve-lookup"><div><p class="eyebrow">CVE record lookup</p><h2>Inspect a<br /><em>vulnerability.</em></h2></div><div class="lookup-content"><form id="cve-lookup-form"><label for="cve-id">CVE identifier</label><div class="input-row"><input id="cve-id" name="cve-id" placeholder="e.g. CVE-2021-44228" pattern="(?:CVE-)?[0-9]{4}-[0-9]{4,}" required /><button type="submit">Search <span>↗</span></button></div></form><p class="form-hint">Enter a complete CVE identifier, with or without the CVE prefix.</p></div></section>
         <section class="record-result" id="cve-record-result" aria-live="polite" hidden></section>
       </section>
 
       <section class="view-panel" id="cve-charts" data-title="CVE / Data charts">
-        <header class="page-heading"><p class="eyebrow">Vulnerability intelligence · Visual analysis</p><h1>CVE data<br /><em>charts.</em></h1><p>See why each actively exploited vulnerability is rising to the top.</p></header>
+        <header class="page-heading"><p class="eyebrow">Vulnerability intelligence · Visual analysis</p><h2>CVE data<br /><em>charts.</em></h2><p>See why each actively exploited vulnerability is rising to the top.</p></header>
         <section class="chart-grid" id="cve-chart-grid"><p class="loading">Loading CVE chart data…</p></section>
+      </section>
+
+      <section class="view-panel" id="dshield-activity" data-title="Honeypot / DShield">
+        <header class="intro"><div><p class="eyebrow"><span class="live-dot"></span> Community honeypot telemetry</p><h2>Attacks,<br /><em>as observed.</em></h2></div><p class="intro-copy">Current attacker, port, SSH, and web-scanning signals collected by the global DShield sensor community.</p></header>
+        <section class="metrics-grid" aria-label="DShield activity overview">
+          <article class="metric-card highlight"><p>Honeypot indicators</p><strong id="dshield-indicator-total">—</strong><span>SSH and web scanner IPs</span></article>
+          <article class="metric-card"><p>SSH attackers</p><strong id="dshield-ssh-total">—</strong><span>DShield Cowrie indicators</span></article>
+          <article class="metric-card"><p>Web scanners</p><strong id="dshield-web-total">—</strong><span>Web honeypot indicators</span></article>
+          <article class="metric-card"><p>Last refreshed</p><strong class="metric-date" id="dshield-updated">—</strong><span>Cached for one hour</span></article>
+        </section>
+        <aside class="metric-card methodology"><p class="eyebrow">About the feed</p><h3>Observed community activity</h3><p class="methodology-copy">DShield aggregates firewall, Cowrie SSH/Telnet, and web honeypot reports. These are observational signals, not proof that an address is currently malicious. Threat Watch retrieves the public feeds server-side, removes malformed display values, and follows DShield's one-hour cache guidance.</p></aside>
+        <section class="section-head"><div><p class="eyebrow">Public telemetry · SANS ISC</p><h2>Live activity</h2></div><button class="text-button dshield-refresh" type="button">Refresh data ↻</button></section>
+        <div id="dshield-notices" aria-live="polite"></div>
+        <section class="dshield-layout" id="dshield-feed" aria-live="polite"><p class="loading">Loading DShield telemetry…</p></section>
+        <section class="lookup-panel"><div><p class="eyebrow">DShield reputation lookup</p><h2>Inspect an<br /><em>address.</em></h2></div><div class="lookup-content"><form id="dshield-lookup-form"><label for="dshield-ip">Public IP address</label><div class="input-row"><input id="dshield-ip" name="dshield-ip" placeholder="e.g. 8.8.8.8" required /><button type="submit">Search <span>↗</span></button></div></form><p class="form-hint">Returns DShield report volume, observed targets, dates, network, and ASN metadata.</p></div></section>
+        <section class="record-result" id="dshield-record-result" aria-live="polite" hidden></section>
+        <p class="source-credit">Data provided by <a href="https://isc.sans.edu/" target="_blank" rel="noreferrer">SANS Technology Institute, Internet Storm Center ↗</a>. DShield data may not be resold.</p>
+      </section>
+
+      <section class="view-panel" id="dshield-charts" data-title="Honeypot / Data charts">
+        <header class="page-heading"><p class="eyebrow">Community honeypot telemetry · Visual analysis</p><h2>Honeypot data<br /><em>charts.</em></h2><p>Compare the sources, services, and credentials appearing across the current DShield community snapshot.</p></header>
+        <section class="chart-grid" id="dshield-chart-grid" aria-live="polite"><p class="loading">Loading DShield chart data…</p></section>
+        <p class="source-credit">Data provided by <a href="https://isc.sans.edu/" target="_blank" rel="noreferrer">SANS Technology Institute, Internet Storm Center ↗</a>. DShield data may not be resold.</p>
       </section>
     </main>
 
-    <footer><span>Threat Watch</span><span class="creator-credit">Vibe Coded by <a href="https://github.com/NoDisassemble" target="_blank" rel="noreferrer">NoDisassemble</a></span><span>Data: MITRE · CISA · FIRST · NVD</span></footer>
+    <footer><span>Threat Watch</span><span class="creator-credit">Vibe Coded by <a href="https://github.com/NoDisassemble" target="_blank" rel="noreferrer">NoDisassemble</a></span><span>Data: MITRE · CISA · FIRST · NVD · DShield</span></footer>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" referrerpolicy="no-referrer"></script>
     <script src="script.js"></script>
   </body>
