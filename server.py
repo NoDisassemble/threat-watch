@@ -9,6 +9,7 @@ import os
 import ipaddress
 import re
 from collections import defaultdict, deque, OrderedDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
@@ -25,7 +26,7 @@ from pydantic import BaseModel, Field
 
 MITRE_API = "https://cwe-api.mitre.org"
 # Single source of truth for API metadata and the version shown in the sidebar.
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 NVD_API = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 KEV_URLS = (
     "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
@@ -36,15 +37,23 @@ CACHE_FILE = Path(__file__).with_name(".watchlist-cache.json")
 CVE_CACHE_FILE = Path(__file__).with_name(".cve-watchlist-cache.json")
 DSHIELD_CACHE_FILE = Path(__file__).with_name(".dshield-cache.json")
 RANSOMWARE_CACHE_FILE = Path(__file__).with_name(".ransomware-cache.json")
+APT_CACHE_FILE = Path(__file__).with_name(".apt-cache.json")
+RADAR_CACHE_FILE = Path(__file__).with_name(".radar-cache.json")
 OWASP_MAP_FILE = Path(__file__).with_name("owasp_2025.json")
 CACHE_MAX_AGE = timedelta(hours=24)
 DSHIELD_CACHE_MAX_AGE = timedelta(hours=1)
 RANSOMWARE_CACHE_MAX_AGE = timedelta(hours=1)
+APT_CACHE_MAX_AGE = timedelta(hours=24)
+RADAR_CACHE_MAX_AGE = timedelta(hours=1)
 DSHIELD_TOP_IPS_API = "https://isc.sans.edu/api/topips/records/20?json"
 DSHIELD_TOP_PORTS_API = "https://isc.sans.edu/api/topports/records/20?json"
 DSHIELD_INTELFEED_API = "https://isc.sans.edu/api/intelfeed?json"
 DSHIELD_USERNAMES_API = "https://isc.sans.edu/sshallusernames.json"
 RANSOMLOOK_POSTS_API = "https://www.ransomlook.io/api/posts?days=30"
+MISP_THREAT_ACTORS_URL = (
+    "https://raw.githubusercontent.com/MISP/misp-galaxy/main/clusters/threat-actor.json"
+)
+CLOUDFLARE_RADAR_BASE = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/top"
 RANSOMWARE_WINDOW_DAYS = 30
 # Thirteen calendar buckets cover the rolling 365-day window, including both
 # partial boundary months.
@@ -55,6 +64,8 @@ CWE_REFRESH_LOCK = Lock()
 CVE_REFRESH_LOCK = Lock()
 DSHIELD_REFRESH_LOCK = Lock()
 RANSOMWARE_REFRESH_LOCK = Lock()
+APT_REFRESH_LOCK = Lock()
+RADAR_REFRESH_LOCK = Lock()
 CVE_LOOKUP_REFRESH_LOCK = Lock()
 DSHIELD_IP_REFRESH_LOCK = Lock()
 MITRE_PROXY_REFRESH_LOCK = Lock()
@@ -206,6 +217,9 @@ class DshieldAttacker(BaseModel):
     ip: str
     reports: int = 0
     targets: int = 0
+    country: Optional[str] = None
+    asn: Optional[str] = None
+    as_name: Optional[str] = None
 
 
 class DshieldPort(BaseModel):
@@ -231,6 +245,7 @@ class DshieldIndicator(BaseModel):
 class DshieldActivityResponse(BaseModel):
     top_attackers: List[DshieldAttacker] = Field(default_factory=list)
     top_ports: List[DshieldPort] = Field(default_factory=list)
+    top_ports_date: Optional[str] = None
     usernames: List[DshieldUsername] = Field(default_factory=list)
     indicators: List[DshieldIndicator] = Field(default_factory=list)
     indicator_counts: Dict[str, int] = Field(default_factory=dict)
@@ -239,6 +254,7 @@ class DshieldActivityResponse(BaseModel):
     cache_seconds: int = 0
     errors: List[str] = Field(default_factory=list)
     attribution: Optional[str] = None
+    schema_version: int = 1
     error: Optional[str] = None
 
 
@@ -254,6 +270,37 @@ class DshieldIpResponse(BaseModel):
     as_name: Optional[str] = None
     network: Optional[str] = None
     comment: Optional[str] = None
+    error: Optional[str] = None
+
+
+class RadarTarget(BaseModel):
+    rank: int
+    country: str
+    country_name: str
+    value: float = 0
+
+
+class RadarFlow(BaseModel):
+    rank: int
+    origin_country: str
+    origin_name: str
+    target_country: str
+    target_name: str
+    value: float = 0
+
+
+class RadarActivityResponse(BaseModel):
+    targets: List[RadarTarget] = Field(default_factory=list)
+    flows: List[RadarFlow] = Field(default_factory=list)
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+    generated_at: Optional[str] = None
+    cache_seconds: int = 0
+    source: Optional[str] = None
+    methodology: Optional[str] = None
+    stale: bool = False
+    warning: Optional[str] = None
+    schema_version: int = 1
     error: Optional[str] = None
 
 
@@ -292,13 +339,42 @@ class RansomwareActivityResponse(BaseModel):
     error: Optional[str] = None
 
 
+class AptActor(BaseModel):
+    name: str
+    uuid: str
+    description: str = ""
+    country_code: Optional[str] = None
+    suspected_sponsor: Optional[str] = None
+    aliases: List[str] = Field(default_factory=list)
+    sectors: List[str] = Field(default_factory=list)
+    classifications: List[str] = Field(default_factory=list)
+    incident_type: Optional[str] = None
+    attribution_confidence: Optional[str] = None
+    references: List[str] = Field(default_factory=list)
+
+
+class AptCatalogResponse(BaseModel):
+    items: List[AptActor] = Field(default_factory=list)
+    actor_count: int = 0
+    country_count: int = 0
+    suspected_sponsor_count: int = 0
+    generated_at: Optional[str] = None
+    cache_seconds: int = 0
+    source: Optional[str] = None
+    methodology: Optional[str] = None
+    stale: bool = False
+    warning: Optional[str] = None
+    error: Optional[str] = None
+
+
 app = FastAPI(
     title="Threat Watch API",
-    summary="Live CWE, CVE, and community honeypot intelligence",
+    summary="Live vulnerability, threat actor, and community telemetry intelligence",
     description=(
         "Backend API for the Threat Watch SPA. It combines MITRE CWE, CISA KEV, "
-        "FIRST EPSS, NVD CVE, SANS ISC/DShield community telemetry, and "
-        "RansomLook leak-site observations."
+        "FIRST EPSS, NVD CVE, the MISP threat-actor galaxy, SANS ISC/DShield "
+        "community telemetry, Cloudflare Radar attack aggregates, and RansomLook "
+        "leak-site observations."
     ),
     version=VERSION,
     docs_url="/api/swagger",
@@ -481,11 +557,26 @@ def dshield_activity(response: Response):
     return get_dshield_activity()
 
 
+@app.get("/api/radar", response_model=RadarActivityResponse, tags=["Network telemetry"])
+def radar_activity(response: Response):
+    """Return normalized Cloudflare Radar target countries and attack paths."""
+    data = get_radar_activity()
+    cache_response(response, 60 if data.get("error") else int(RADAR_CACHE_MAX_AGE.total_seconds()))
+    return data
+
+
 @app.get("/api/ransomware", response_model=RansomwareActivityResponse, tags=["Ransomware"])
 def ransomware_activity(response: Response):
     """Return ransomware groups ranked by unique public victim claims over 30 days."""
     cache_response(response, int(RANSOMWARE_CACHE_MAX_AGE.total_seconds()))
     return get_ransomware_activity()
+
+
+@app.get("/api/apt", response_model=AptCatalogResponse, tags=["Threat actors"])
+def apt_catalog(response: Response):
+    """Return country-attributed APT and threat-actor profiles from MISP Galaxy."""
+    cache_response(response, int(APT_CACHE_MAX_AGE.total_seconds()))
+    return get_apt_catalog()
 
 
 @app.get("/api/dshield/ip/{address}", response_model=DshieldIpResponse, tags=["Honeypots"])
@@ -580,6 +671,163 @@ def fetch_json(url):
         return json.load(response)
 
 
+def fetch_radar_json(path, name):
+    """Fetch one authenticated Cloudflare Radar aggregate without exposing its token."""
+    token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("Cloudflare Radar is not configured.")
+    query = urlencode({"dateRange": "1d", "limit": 12, "format": "json", "name": name})
+    request = UrlRequest(
+        f"{CLOUDFLARE_RADAR_BASE}/{path}?{query}",
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {token}",
+            "User-Agent": f"Threat-Watch/{VERSION}",
+        },
+    )
+    with urlopen(request, timeout=30) as response:
+        payload = json.load(response)
+    if not isinstance(payload, dict) or payload.get("success") is not True:
+        raise ValueError("Cloudflare Radar returned an unexpected response.")
+    return payload
+
+
+def radar_result_items(payload, name):
+    """Return the named Radar result list while tolerating its default top_0 key."""
+    result = payload.get("result", {})
+    if not isinstance(result, dict):
+        raise ValueError("Cloudflare Radar returned an unexpected result.")
+    items = result.get(name)
+    if not isinstance(items, list):
+        items = result.get("top_0")
+    if not isinstance(items, list):
+        raise ValueError("Cloudflare Radar did not return ranked data.")
+    return items
+
+
+def radar_country_code(value):
+    """Normalize one ISO alpha-2 country code from the Radar response."""
+    code = str(value or "").strip().upper()
+    return code if re.fullmatch(r"[A-Z]{2}", code) else None
+
+
+def radar_date_range(payload):
+    """Extract the observation window from Radar metadata."""
+    result = payload.get("result", {}) if isinstance(payload, dict) else {}
+    meta = result.get("meta", {}) if isinstance(result, dict) else {}
+    date_range = meta.get("dateRange", {}) if isinstance(meta, dict) else {}
+    if isinstance(date_range, list):
+        date_range = date_range[0] if date_range else {}
+    if not isinstance(date_range, dict):
+        return None, None
+    return date_range.get("startTime"), date_range.get("endTime")
+
+
+@single_flight(RADAR_REFRESH_LOCK)
+def get_radar_activity():
+    """Cache and normalize Cloudflare's aggregate layer 7 target telemetry."""
+    cached_data = None
+    if RADAR_CACHE_FILE.exists():
+        try:
+            cached = json.loads(RADAR_CACHE_FILE.read_text(encoding="utf-8"))
+            created = datetime.fromisoformat(cached["created_at"])
+            cached_data = cached["data"]
+            if (cached_data.get("schema_version") == 1 and
+                    datetime.now(timezone.utc) - created < RADAR_CACHE_MAX_AGE):
+                return cached_data
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            cached_data = None
+
+    try:
+        targets_payload = fetch_radar_json("locations/target", "targets")
+        flows_payload = fetch_radar_json("attacks", "flows")
+        target_items = radar_result_items(targets_payload, "targets")
+        flow_items = radar_result_items(flows_payload, "flows")
+    except (HTTPError, URLError, json.JSONDecodeError, RuntimeError, TypeError, ValueError):
+        if cached_data:
+            stale_data = dict(cached_data)
+            stale_data.update({
+                "stale": True,
+                "warning": "Cloudflare Radar is temporarily unavailable; showing the last cached snapshot.",
+            })
+            return stale_data
+        return {"error": "Cloudflare Radar target telemetry is temporarily unavailable."}
+
+    targets = []
+    for item in target_items:
+        if not isinstance(item, dict):
+            continue
+        code = radar_country_code(item.get("targetCountryAlpha2"))
+        try:
+            value = round(float(item.get("value") or 0), 4)
+            rank = int(item.get("rank") or len(targets) + 1)
+        except (TypeError, ValueError):
+            continue
+        if code:
+            targets.append({
+                "rank": rank,
+                "country": code,
+                "country_name": clean_actor_text(item.get("targetCountryName"), 80) or code,
+                "value": value,
+            })
+
+    flows = []
+    for item in flow_items:
+        if not isinstance(item, dict):
+            continue
+        origin = radar_country_code(item.get("originCountryAlpha2"))
+        target = radar_country_code(item.get("targetCountryAlpha2"))
+        try:
+            value = round(float(item.get("value") or 0), 4)
+            rank = int(item.get("rank") or len(flows) + 1)
+        except (TypeError, ValueError):
+            continue
+        if origin and target:
+            flows.append({
+                "rank": rank,
+                "origin_country": origin,
+                "origin_name": clean_actor_text(item.get("originCountryName"), 80) or origin,
+                "target_country": target,
+                "target_name": clean_actor_text(item.get("targetCountryName"), 80) or target,
+                "value": value,
+            })
+
+    if not targets or not flows:
+        if cached_data:
+            stale_data = dict(cached_data)
+            stale_data.update({
+                "stale": True,
+                "warning": "Cloudflare Radar returned incomplete data; showing the last cached snapshot.",
+            })
+            return stale_data
+        return {"error": "Cloudflare Radar did not return usable target telemetry."}
+
+    period_start, period_end = radar_date_range(targets_payload)
+    now = datetime.now(timezone.utc)
+    data = {
+        "targets": sorted(targets, key=lambda item: item["rank"])[:12],
+        "flows": sorted(flows, key=lambda item: item["rank"])[:12],
+        "period_start": period_start,
+        "period_end": period_end,
+        "generated_at": now.isoformat(),
+        "cache_seconds": int(RADAR_CACHE_MAX_AGE.total_seconds()),
+        "source": "Cloudflare Radar",
+        "methodology": (
+            "Percent share of Cloudflare-observed mitigated layer 7 requests over the last 24 hours. "
+            "Target geography uses the attacked zone's billing country."
+        ),
+        "stale": False,
+        "schema_version": 1,
+    }
+    try:
+        RADAR_CACHE_FILE.write_text(json.dumps({
+            "created_at": now.isoformat(), "data": data
+        }), encoding="utf-8")
+    except OSError:
+        pass
+    return data
+
+
 def normalize_dshield_ip_record(payload):
     """Flatten the occasionally nested DShield IP response."""
     record = payload.get("ip", payload) if isinstance(payload, dict) else {}
@@ -614,6 +862,43 @@ def get_dshield_ip(address):
         return {"error": "Unable to reach the DShield IP API."}
 
 
+def enrich_dshield_attacker(item):
+    """Add bounded DShield-owned country and network context to one top source."""
+    address = item.get("ip")
+    if not address:
+        return item
+    hit, record = DSHIELD_IP_CACHE.get(address)
+    if not hit:
+        record = get_dshield_ip(address)
+        if record and not record.get("error"):
+            DSHIELD_IP_CACHE.set(address, record, DSHIELD_IP_TTL.total_seconds())
+    if record and not record.get("error"):
+        enriched = dict(item)
+        enriched.update({
+            "country": clean_actor_text(record.get("country"), 2).upper() or None,
+            "asn": clean_actor_text(record.get("asn"), 20) or None,
+            "as_name": clean_actor_text(record.get("as_name"), 100) or None,
+        })
+        return enriched
+    return item
+
+
+def enrich_dshield_attackers(items, limit=12):
+    """Enrich top sources concurrently while keeping upstream requests bounded."""
+    enriched = list(items)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {
+            executor.submit(enrich_dshield_attacker, item): index
+            for index, item in enumerate(enriched[:limit])
+        }
+        for future in as_completed(futures):
+            try:
+                enriched[futures[future]] = future.result()
+            except (HTTPError, URLError, ValueError):
+                continue
+    return enriched
+
+
 def clean_dshield_username(value):
     """Keep display-safe Cowrie usernames and discard binary probe payloads."""
     username = str(value or "").strip()
@@ -629,7 +914,8 @@ def get_dshield_activity():
         try:
             cached = json.loads(DSHIELD_CACHE_FILE.read_text(encoding="utf-8"))
             created = datetime.fromisoformat(cached["created_at"])
-            if datetime.now(timezone.utc) - created < DSHIELD_CACHE_MAX_AGE:
+            if (cached["data"].get("schema_version") == 3 and
+                    datetime.now(timezone.utc) - created < DSHIELD_CACHE_MAX_AGE):
                 return cached["data"]
         except (OSError, json.JSONDecodeError, KeyError, ValueError):
             pass
@@ -637,6 +923,7 @@ def get_dshield_activity():
     errors = []
     top_attackers = []
     top_ports = []
+    top_ports_date = None
     usernames = []
     indicators = []
     indicator_counts = {"ssh": 0, "web": 0}
@@ -659,8 +946,25 @@ def get_dshield_activity():
             "sources": item.get("sources", 0),
         } for item in records if isinstance(item, dict) and item.get("targetport") is not None],
             key=lambda item: item["rank"] or 999)
+        top_ports_date = payload.get("date") if isinstance(payload, dict) else None
+        if not top_ports:
+            completed_day = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+            payload = fetch_json(
+                f"https://isc.sans.edu/api/topports/records/20/{completed_day}?json"
+            )
+            records = payload.values() if isinstance(payload, dict) else payload
+            top_ports = sorted([{
+                "rank": item.get("rank"), "port": item.get("targetport"),
+                "records": item.get("records", 0), "targets": item.get("targets", 0),
+                "sources": item.get("sources", 0),
+            } for item in records if isinstance(item, dict) and item.get("targetport") is not None],
+                key=lambda item: item["rank"] or 999)
+            top_ports_date = payload.get("date", completed_day) if isinstance(payload, dict) else completed_day
     except (HTTPError, URLError, json.JSONDecodeError, TypeError):
         errors.append("Target port data is temporarily unavailable.")
+
+    if top_attackers:
+        top_attackers = enrich_dshield_attackers(top_attackers)
 
     try:
         payload = fetch_json(DSHIELD_USERNAMES_API)
@@ -696,6 +1000,7 @@ def get_dshield_activity():
     data = {
         "top_attackers": top_attackers,
         "top_ports": top_ports,
+        "top_ports_date": top_ports_date,
         "usernames": usernames,
         "indicators": indicators,
         "indicator_counts": indicator_counts,
@@ -704,6 +1009,7 @@ def get_dshield_activity():
         "cache_seconds": int(DSHIELD_CACHE_MAX_AGE.total_seconds()),
         "errors": errors,
         "attribution": "SANS Technology Institute, Internet Storm Center",
+        "schema_version": 3,
     }
     try:
         DSHIELD_CACHE_FILE.write_text(json.dumps({
@@ -836,6 +1142,125 @@ def get_ransomware_activity():
     }
     try:
         RANSOMWARE_CACHE_FILE.write_text(json.dumps({
+            "created_at": now.isoformat(), "data": data
+        }), encoding="utf-8")
+    except OSError:
+        pass
+    return data
+
+
+def clean_actor_text(value, max_length):
+    """Normalize community-maintained actor metadata for safe, compact display."""
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    text = "".join(character for character in text if character.isprintable())
+    return text[:max_length]
+
+
+def actor_list(value, limit, max_length=100):
+    """Coerce a scalar or list-valued MISP field to a bounded string list."""
+    values = value if isinstance(value, list) else [value] if value else []
+    cleaned = []
+    seen = set()
+    for item in values:
+        text = clean_actor_text(item, max_length)
+        key = text.casefold()
+        if text and key not in seen:
+            seen.add(key)
+            cleaned.append(text)
+        if len(cleaned) >= limit:
+            break
+    return cleaned
+
+
+@single_flight(APT_REFRESH_LOCK)
+def get_apt_catalog():
+    """Normalize country-attributed profiles from the public MISP Galaxy repository."""
+    cached_data = None
+    if APT_CACHE_FILE.exists():
+        try:
+            cached = json.loads(APT_CACHE_FILE.read_text(encoding="utf-8"))
+            created = datetime.fromisoformat(cached["created_at"])
+            cached_data = cached["data"]
+            if datetime.now(timezone.utc) - created < APT_CACHE_MAX_AGE:
+                return cached_data
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            cached_data = None
+
+    try:
+        payload = fetch_json(MISP_THREAT_ACTORS_URL)
+        values = payload.get("values") if isinstance(payload, dict) else None
+        if not isinstance(values, list):
+            raise ValueError("MISP Galaxy returned an unexpected response.")
+    except (HTTPError, URLError, json.JSONDecodeError, TypeError, ValueError):
+        if cached_data:
+            stale_data = dict(cached_data)
+            stale_data.update({
+                "stale": True,
+                "warning": "MISP Galaxy is temporarily unavailable; showing the last cached snapshot.",
+            })
+            return stale_data
+        return {"error": "MISP Galaxy threat-actor data is temporarily unavailable."}
+
+    actors = []
+    countries = set()
+    sponsor_count = 0
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        meta = value.get("meta") if isinstance(value.get("meta"), dict) else {}
+        country_code = clean_actor_text(meta.get("country"), 2).upper()
+        if not re.fullmatch(r"[A-Z]{2}", country_code):
+            country_code = None
+        sponsor = clean_actor_text(meta.get("cfr-suspected-state-sponsor"), 100) or None
+        # Country and sponsor fields are the only structured attribution signals in
+        # this feed. Entries without either are intentionally excluded from this view.
+        if not country_code and not sponsor:
+            continue
+        name = clean_actor_text(value.get("value"), 100)
+        uuid = clean_actor_text(value.get("uuid"), 50)
+        if not name or not uuid:
+            continue
+        references = [reference for reference in actor_list(meta.get("refs"), 8, 500)
+                      if re.fullmatch(r"https?://[^\s]+", reference)]
+        sectors = actor_list(meta.get("targeted-sector"), 8)
+        sectors += [sector for sector in actor_list(meta.get("cfr-target-category"), 8)
+                    if sector.casefold() not in {item.casefold() for item in sectors}]
+        classifications = actor_list(meta.get("threat-actor-classification"), 5)
+        actors.append({
+            "name": name,
+            "uuid": uuid,
+            "description": clean_actor_text(value.get("description"), 700),
+            "country_code": country_code,
+            "suspected_sponsor": sponsor,
+            "aliases": actor_list(meta.get("synonyms"), 14),
+            "sectors": sectors[:8],
+            "classifications": classifications,
+            "incident_type": clean_actor_text(meta.get("cfr-type-of-incident"), 80) or None,
+            "attribution_confidence": clean_actor_text(meta.get("attribution-confidence"), 20) or None,
+            "references": references,
+        })
+        if country_code:
+            countries.add(country_code)
+        sponsor_count += int(bool(sponsor))
+
+    actors.sort(key=lambda actor: actor["name"].casefold())
+    now = datetime.now(timezone.utc)
+    data = {
+        "items": actors,
+        "actor_count": len(actors),
+        "country_count": len(countries),
+        "suspected_sponsor_count": sponsor_count,
+        "generated_at": now.isoformat(),
+        "cache_seconds": int(APT_CACHE_MAX_AGE.total_seconds()),
+        "source": "MISP Galaxy threat-actor cluster",
+        "methodology": (
+            "Profiles with structured country or suspected-state-sponsor metadata; "
+            "alphabetical and not ranked by danger or current activity."
+        ),
+        "stale": False,
+    }
+    try:
+        APT_CACHE_FILE.write_text(json.dumps({
             "created_at": now.isoformat(), "data": data
         }), encoding="utf-8")
     except OSError:

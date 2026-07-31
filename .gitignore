@@ -2,4 +2,6 @@
 .cve-watchlist-cache.json
 .dshield-cache.json
 .ransomware-cache.json
+.apt-cache.json
+.radar-cache.json
 __pycache__/

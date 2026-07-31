@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Live CWE, CVE, and honeypot threat intelligence dashboard." />
+    <meta name="description" content="Live APT, CWE, CVE, ransomware, and honeypot threat intelligence dashboard." />
     <title>Threat Watch — Security Intelligence</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -31,33 +31,78 @@
           <a href="#ransomware-charts" data-route="ransomware-charts">Data charts</a>
         </section>
         <section class="nav-group">
-          <p><span class="nav-index">02</span>CWE watchlist</p>
+          <p><span class="nav-index">02</span>APT &amp; nation states</p>
+          <a href="#apt-catalog" data-route="apt-catalog">Actor catalog</a>
+          <a href="#apt-charts" data-route="apt-charts">Data charts</a>
+        </section>
+        <section class="nav-group">
+          <p><span class="nav-index">03</span>CWE watchlist</p>
           <a href="#cwe-watchlist" data-route="cwe-watchlist">Top 10</a>
           <a href="#cwe-charts" data-route="cwe-charts">Data charts</a>
         </section>
         <section class="nav-group">
-          <p><span class="nav-index">03</span>CVE watchlist</p>
+          <p><span class="nav-index">04</span>CVE watchlist</p>
           <a href="#cve-watchlist" data-route="cve-watchlist">Top 10</a>
           <a href="#cve-charts" data-route="cve-charts">Data charts</a>
         </section>
         <section class="nav-group">
-          <p><span class="nav-index">04</span>Honeypot activity</p>
+          <p><span class="nav-index">05</span>Honeypot activity</p>
           <a href="#dshield-activity" data-route="dshield-activity">DShield live feed</a>
           <a href="#dshield-charts" data-route="dshield-charts">Data charts</a>
         </section>
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-status"><span class="live-dot"></span><span>Sources connected</span></div>
-        <div class="sidebar-version" aria-label="Threat Watch release version">Threat Watch <span id="app-version">v2.1.0</span></div>
+        <div class="sidebar-version" aria-label="Threat Watch release version">Threat Watch <span id="app-version">v2.2.0</span></div>
       </div>
     </aside>
 
     <main class="dashboard-shell">
       <section class="view-panel active" id="overview" data-title="Dashboard / Overview">
-        <header class="page-heading overview-heading"><p class="eyebrow"><span class="live-dot"></span> Unified security intelligence</p><h2>Threats,<br /><em>at a glance.</em></h2><p>Four live perspectives on ransomware leak-site activity, software weaknesses, actively exploited vulnerabilities, and community honeypot traffic.</p></header>
+        <header class="page-heading overview-heading"><p class="eyebrow"><span class="live-dot"></span> Unified security intelligence</p><h2>Threats, <em>at a glance.</em></h2><p>Five public-data perspectives on threat actors, ransomware, software weaknesses, actively exploited vulnerabilities, and community honeypot traffic.</p></header>
+        <section class="live-threat-stage" aria-labelledby="live-threat-title">
+          <header class="live-stage-header"><div><p class="eyebrow"><span class="live-dot"></span> Near-live network telemetry</p><h2 id="live-threat-title">Observed activity</h2></div><div class="live-stage-status"><span id="live-map-provider">Cloudflare Radar · 24-hour view</span><strong id="live-map-updated">Loading…</strong></div></header>
+          <div class="live-stage-layout">
+            <article class="live-map-panel"><div class="live-panel-heading"><div><p class="eyebrow" id="live-map-kicker">Attack paths</p><h3 id="live-map-title">Leading origin-to-target flows</h3></div><div class="live-map-tools"><div class="map-view-switcher" role="group" aria-label="Map data view"><button type="button" data-map-view="source" aria-pressed="false">Sources</button><button type="button" data-map-view="target" aria-pressed="false">Targets</button><button type="button" data-map-view="flow" aria-pressed="true">Flows</button></div><span class="status" id="live-map-status">Animated snapshot</span></div></div><div class="threat-map" id="live-threat-map" aria-live="polite"><p class="loading">Loading observed attack geography…</p></div><p class="map-caption" id="live-map-caption"><strong>Flows use Cloudflare-observed origin and target country pairs.</strong> Loading the latest aggregate snapshot…</p></article>
+            <article class="live-feed-panel"><div class="live-panel-heading"><div><p class="eyebrow" id="live-feed-kicker">Ranked paths</p><h3 id="live-feed-title">Top observed flows</h3></div><span class="status" id="live-feed-status">Replaying</span></div><div class="live-feed" id="live-attacker-feed" aria-live="polite"><p class="loading">Loading attack paths…</p></div></article>
+          </div>
+          <div class="live-summaries">
+            <article class="live-summary-card"><p class="eyebrow">Origin snapshot · DShield</p><h3>Top source countries</h3><div id="live-country-bars"><p class="loading">Loading country totals…</p></div></article>
+            <article class="live-summary-card"><p class="eyebrow" id="live-port-period">Service targeting</p><h3>Top targeted ports</h3><div id="live-port-bars"><p class="loading">Loading port totals…</p></div></article>
+          </div>
+          <p class="source-credit">Source telemetry provided by <a href="https://isc.sans.edu/" target="_blank" rel="noreferrer">SANS Technology Institute, Internet Storm Center ↗</a>. Target and flow views use aggregated <a href="https://radar.cloudflare.com/" target="_blank" rel="noreferrer">Cloudflare Radar ↗</a> layer 7 mitigated-request data; target geography reflects the attacked zone’s billing country.</p>
+        </section>
         <section class="overview-stack" id="overview-cards" aria-live="polite">
           <article class="overview-card overview-loading"><p class="loading">Loading dashboard snapshots…</p></article>
         </section>
+      </section>
+
+      <section class="view-panel" id="apt-catalog" data-title="APT / Actor catalog">
+        <header class="intro"><div><p class="eyebrow"><span class="live-dot"></span> Public threat-actor intelligence</p><h2>APT groups,<br /><em>mapped.</em></h2></div><p class="intro-copy">Explore country-attributed and suspected state-linked actors, their aliases, targets, and primary research references.</p></header>
+        <section class="metrics-grid" aria-label="APT catalog overview">
+          <article class="metric-card highlight"><p>Attributed profiles</p><strong id="apt-actor-count">—</strong><span>Country or sponsor metadata</span></article>
+          <article class="metric-card"><p>Countries represented</p><strong id="apt-country-count">—</strong><span>Structured country codes</span></article>
+          <article class="metric-card"><p>Suspected sponsors</p><strong id="apt-sponsor-count">—</strong><span>Explicit sponsor claims</span></article>
+          <article class="metric-card"><p>Last refreshed</p><strong class="metric-date" id="apt-updated">—</strong><span>Cached for 24 hours</span></article>
+        </section>
+        <aside class="metric-card methodology"><p class="eyebrow">Attribution caveat</p><h3>A catalog, not a live activity ranking</h3><p class="methodology-copy">Threat Watch includes MISP Galaxy entries with structured country or suspected-state-sponsor metadata. Attribution is contested and may describe a threat actor, activity cluster, campaign, or operation. Inclusion does not prove government control, current activity, or relative danger.</p></aside>
+        <section class="section-head"><div><p class="eyebrow">Open source · MISP Galaxy</p><h2>Actor catalog</h2></div><button class="text-button apt-refresh" type="button">Refresh data ↻</button></section>
+        <form class="catalog-filters" id="apt-filter-form" role="search">
+          <label><span>Search actors or aliases</span><input id="apt-search" type="search" placeholder="e.g. APT29 or Cozy Bear" /></label>
+          <label><span>Country</span><select id="apt-country"><option value="">All attributed countries</option></select></label>
+        </form>
+        <div id="apt-notices" aria-live="polite"></div>
+        <p class="catalog-count" id="apt-result-count" aria-live="polite"></p>
+        <section class="actor-grid" id="apt-grid" aria-live="polite"><p class="loading">Loading threat-actor profiles…</p></section>
+        <button class="catalog-more" id="apt-load-more" type="button" hidden>Show more profiles ↓</button>
+        <p class="source-credit">Actor data provided by <a href="https://github.com/MISP/misp-galaxy" target="_blank" rel="noreferrer">MISP Galaxy ↗</a>. Follow each profile’s references before making attribution or response decisions.</p>
+      </section>
+
+      <section class="view-panel" id="apt-charts" data-title="APT / Data charts">
+        <header class="page-heading"><p class="eyebrow">Threat-actor intelligence · Visual analysis</p><h2>Actor catalog<br /><em>charts.</em></h2><p>Explore attribution concentration, reported target sectors, catalog coverage, and the naming and research depth behind public actor profiles.</p></header>
+        <aside class="metric-card methodology"><p class="eyebrow">Reading the data</p><h3>Knowledge-base coverage, not operational activity</h3><p class="methodology-copy">These charts describe source-reported metadata in the MISP Galaxy catalog. They do not measure attack frequency, capability, current activity, or relative danger. Missing metadata means “not recorded in this source,” not “none.”</p></aside>
+        <section class="chart-grid" id="apt-chart-grid" aria-live="polite"><p class="loading">Loading actor chart data…</p></section>
+        <p class="source-credit">Actor data provided by <a href="https://github.com/MISP/misp-galaxy" target="_blank" rel="noreferrer">MISP Galaxy ↗</a>. Country and sponsor fields are attribution claims and may be disputed.</p>
       </section>
 
       <section class="view-panel" id="cwe-watchlist" data-title="CWE / Top 10">
@@ -148,7 +193,7 @@
       </section>
     </main>
 
-    <footer><span>Threat Watch</span><span class="creator-credit">Vibe Coded by <a href="https://github.com/NoDisassemble" target="_blank" rel="noreferrer">NoDisassemble</a></span><span>Data: MITRE · CISA · FIRST · NVD · DShield · RansomLook</span></footer>
+    <footer><span>Threat Watch</span><span class="creator-credit">Vibe Coded by <a href="https://github.com/NoDisassemble" target="_blank" rel="noreferrer">NoDisassemble</a></span><span>Data: MITRE · MISP · CISA · FIRST · NVD · DShield · RansomLook</span></footer>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" referrerpolicy="no-referrer"></script>
     <script src="script.js"></script>
   </body>
