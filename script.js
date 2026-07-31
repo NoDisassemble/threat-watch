@@ -423,7 +423,18 @@ function startLiveActivity(items) {
     document.querySelectorAll('.map-flow').forEach((flow) => flow.classList.toggle('active', Number(flow.dataset.flowIndex) === index));
     const row = document.querySelector(`.live-feed-row[data-feed-index="${index}"]`);
     const feed = document.querySelector('#live-attacker-feed');
-    if (row && feed) feed.scrollTo({ top: Math.max(0, row.offsetTop - feed.offsetTop - 8), behavior: 'smooth' });
+    if (row && feed) {
+      const edgePadding = 8;
+      const rowTop = row.offsetTop;
+      const rowBottom = rowTop + row.offsetHeight;
+      const visibleTop = feed.scrollTop + edgePadding;
+      const visibleBottom = feed.scrollTop + feed.clientHeight - edgePadding;
+      if (rowTop < visibleTop) {
+        feed.scrollTo({ top: Math.max(0, rowTop - edgePadding), behavior: 'smooth' });
+      } else if (rowBottom > visibleBottom) {
+        feed.scrollTo({ top: rowBottom - feed.clientHeight + edgePadding, behavior: 'smooth' });
+      }
+    }
     index = (index + 1) % items.length;
   };
   advance();
