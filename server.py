@@ -22,6 +22,7 @@ from urllib.request import Request as UrlRequest, urlopen
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 MITRE_API = "https://cwe-api.mitre.org"
@@ -59,6 +60,7 @@ RANSOMWARE_WINDOW_DAYS = 30
 # partial boundary months.
 TIMELINE_MONTHS = 13
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env", override=False)
 STATIC_FILES = {"index.html", "styles.css", "script.js"}
 CWE_REFRESH_LOCK = Lock()
 CVE_REFRESH_LOCK = Lock()

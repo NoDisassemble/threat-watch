@@ -88,11 +88,13 @@ python -m pip install -r requirements.txt
    python -m pip install -r requirements.txt
    ```
 
-   To enable the target and flow map views, set a Cloudflare token scoped to **Account > Radar > Read** in the same shell:
+   To enable the target and flow map views locally, copy `.env.example` to `.env` and add a Cloudflare token scoped to **Account > Radar > Read**:
 
-   ```powershell
-   $env:CLOUDFLARE_API_TOKEN = "your-token"
+   ```dotenv
+   CLOUDFLARE_API_TOKEN=your-token
    ```
+
+   The local `.env` file is ignored by Git. Existing system and Render environment variables take precedence over values in this file.
 
 3. Start the local server:
 

@@ -4,4 +4,5 @@
 .ransomware-cache.json
 .apt-cache.json
 .radar-cache.json
+.env
 __pycache__/
